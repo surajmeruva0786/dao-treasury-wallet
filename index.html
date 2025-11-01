@@ -44,43 +44,20 @@
     <main>
         <section id="home" class="hero">
             <div class="hero-content">
-                <h1 class="hero-title">
-                    <span class="gradient-text">DAO Treasury Wallet</span>
-                </h1>
-                <p class="hero-subtitle">Decentralized governance for the future of finance</p>
+                <h1 class="hero-title">Treasury Management</h1>
+                <p class="hero-subtitle">Transparent. Secure. Community-driven.</p>
                 <p class="hero-description">
-                    Manage your organization's treasury with transparency, 
-                    security, and community-driven decision making.
+                    A decentralized platform for managing organizational funds through 
+                    on-chain governance and community voting.
                 </p>
                 <div class="hero-buttons">
                     <button class="btn btn-primary">
-                        <span class="btn-text">Explore Treasury</span>
-                        <span class="btn-glow"></span>
+                        <span class="btn-text">View Treasury</span>
                     </button>
                     <button class="btn btn-secondary">
                         <span class="btn-text">View Proposals</span>
-                        <span class="btn-glow"></span>
                     </button>
                 </div>
-                <div class="stats-grid">
-                    <div class="stat-card">
-                        <div class="stat-value">$2.4M</div>
-                        <div class="stat-label">Total Treasury</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-value">156</div>
-                        <div class="stat-label">Active Members</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-value">42</div>
-                        <div class="stat-label">Proposals</div>
-                    </div>
-                </div>
-            </div>
-            <div class="hero-visual">
-                <div class="orb orb-1"></div>
-                <div class="orb orb-2"></div>
-                <div class="orb orb-3"></div>
             </div>
         </section>
 
@@ -100,31 +77,69 @@
 
         <section id="treasury" class="section treasury-section">
             <div class="container">
-                <h2 class="section-title">Treasury Overview</h2>
+                <h2 class="section-title">Treasury Dashboard</h2>
+                
+                <div class="treasury-wallet-info">
+                    <div class="wallet-info-card">
+                        <div class="wallet-info-header">
+                            <h3 class="wallet-info-title">Treasury Wallet</h3>
+                        </div>
+                        <div class="wallet-address-display" id="treasury-wallet-address">
+                            <input type="text" id="treasury-wallet-input" class="treasury-wallet-input" 
+                                   placeholder="Enter Treasury Wallet Address (G...)" 
+                                   pattern="G[A-Z0-9]{55}"
+                                   title="Must be a valid Stellar address starting with G">
+                            <button id="set-treasury-wallet-btn" class="btn btn-primary set-wallet-btn">
+                                <span class="btn-text">Set Treasury Wallet</span>
+                                <span class="btn-glow"></span>
+                            </button>
+                            <div class="treasury-wallet-saved" id="treasury-wallet-saved" style="display: none;">
+                                <span class="wallet-saved-icon">✓</span>
+                                <span class="wallet-saved-address"></span>
+                                <button id="change-treasury-wallet-btn" class="btn btn-secondary change-wallet-btn">
+                                    <span class="btn-text">Change</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="treasury-grid">
                     <div class="treasury-card">
-                        <div class="card-icon">💰</div>
-                        <h3 class="card-title">Total Assets</h3>
-                        <p class="card-value">$2,456,789</p>
-                        <p class="card-change positive">+12.5% this month</p>
+                        <h3 class="card-title">Balance</h3>
+                        <p class="card-value" id="xlm-balance">
+                            <span class="loading-spinner">Loading...</span>
+                        </p>
+                        <p class="card-change neutral" id="xlm-balance-usd">≈ $0 USD</p>
+                        <button id="refresh-balance-btn" class="refresh-btn" title="Refresh">↻</button>
                     </div>
                     <div class="treasury-card">
-                        <div class="card-icon">📊</div>
-                        <h3 class="card-title">ETH Balance</h3>
-                        <p class="card-value">1,234.56 ETH</p>
-                        <p class="card-change neutral">≈ $1.8M USD</p>
+                        <h3 class="card-title">Transactions</h3>
+                        <p class="card-value" id="total-transactions">
+                            <span class="loading-spinner">Loading...</span>
+                        </p>
+                        <p class="card-change neutral">All time</p>
                     </div>
                     <div class="treasury-card">
-                        <div class="card-icon">🪙</div>
-                        <h3 class="card-title">Governance Tokens</h3>
-                        <p class="card-value">500,000 DAO</p>
-                        <p class="card-change positive">+5.2% APY</p>
+                        <h3 class="card-title">Recent Activity</h3>
+                        <p class="card-value" id="last-transaction-amount">
+                            <span class="loading-spinner">Loading...</span>
+                        </p>
+                        <p class="card-change neutral" id="last-transaction-time">Never</p>
                     </div>
                     <div class="treasury-card">
-                        <div class="card-icon">💸</div>
-                        <h3 class="card-title">Monthly Expenses</h3>
-                        <p class="card-value">$45,678</p>
-                        <p class="card-change negative">-3.1% vs last month</p>
+                        <h3 class="card-title">Network</h3>
+                        <p class="card-value" id="stellar-network">Testnet</p>
+                        <p class="card-change neutral">Stellar</p>
+                    </div>
+                </div>
+
+                <div class="recent-transactions-section">
+                    <h3 class="section-subtitle">Recent Transactions</h3>
+                    <div class="transactions-container" id="transactions-container">
+                        <div class="loading-state">
+                            <span class="loading-spinner">Loading transactions...</span>
+                        </div>
                     </div>
                 </div>
             </div>

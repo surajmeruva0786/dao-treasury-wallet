@@ -897,15 +897,19 @@ const firebaseConfig = {
 
           const shortRecipient = `${proposal.recipient.substring(0, 8)}...${proposal.recipient.substring(proposal.recipient.length - 6)}`;
 
+          const proposalPassed = votesFor.length > votesAgainst.length;
+          const isExecuted = proposal.status === 'executed';
+          const canExecute = proposalPassed && !isExecuted && userWalletAddress;
+
           const card = document.createElement('div');
-          card.className = 'proposal-card';
+          card.className = `proposal-card ${isExecuted ? 'proposal-executed' : ''}`;
           card.style.opacity = '0';
           card.style.transform = 'translateY(30px)';
           card.style.transition = 'opacity 0.6s cubic-bezier(0.4, 0, 0.2, 1), transform 0.6s cubic-bezier(0.4, 0, 0.2, 1)';
           
           card.innerHTML = `
               <div class="proposal-header">
-                  <span class="proposal-status status-${proposal.status}">${proposal.status}</span>
+                  <span class="proposal-status status-${isExecuted ? 'executed' : proposal.status}">${isExecuted ? 'executed' : proposal.status}</span>
                   <span class="proposal-id">#${proposalId.substring(0, 6)}</span>
               </div>
               <h3 class="proposal-title">${proposal.title}</h3>
@@ -943,6 +947,23 @@ const firebaseConfig = {
                       👎 Vote Against
                   </button>
               </div>
+              ${canExecute ? `
+                  <button class="btn btn-primary execute-payment-btn" 
+                          data-proposal-id="${proposalId}">
+                      <span class="btn-text">💸 Execute Payment</span>
+                      <span class="btn-glow"></span>
+                  </button>
+              ` : ''}
+              ${isExecuted ? `
+                  <div style="margin-top: 1.5rem; padding: 1rem; background: rgba(34, 197, 94, 0.1); border: 1px solid rgba(34, 197, 94, 0.3); border-radius: 12px; text-align: center;">
+                      <div style="color: #22c55e; font-weight: 700; font-size: 1.1rem; margin-bottom: 0.5rem;">✓ Payment Executed</div>
+                      ${proposal.transactionHash ? `
+                          <div style="font-size: 0.85rem; color: var(--text-secondary); font-family: 'Courier New', monospace;">
+                              Tx: ${proposal.transactionHash.substring(0, 12)}...
+                          </div>
+                      ` : ''}
+                  </div>
+              ` : ''}
           `;
 
           const voteButtons = card.querySelectorAll('.vote-btn');
@@ -954,23 +975,22 @@ const firebaseConfig = {
               });
           });
 
-          card.addEventListener('mousemove', (e) => {
-              const rect = card.getBoundingClientRect();
-              const x = e.clientX - rect.left;
-              const y = e.clientY - rect.top;
-              
-              const centerX = rect.width / 2;
-              const centerY = rect.height / 2;
-              
-              const rotateX = (y - centerY) / 20;
-              const rotateY = (centerX - x) / 20;
-              
-              card.style.transform = `perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) translateY(-12px)`;
-          });
+          const executeBtn = card.querySelector('.execute-payment-btn');
+          if (executeBtn) {
+              executeBtn.addEventListener('click', async () => {
+                  const proposalId = executeBtn.dataset.proposalId;
+                  try {
+                      executeBtn.disabled = true;
+                      executeBtn.querySelector('.btn-text').textContent = 'Processing...';
+                      await window.executePayment(proposalId, proposal);
+                  } catch (error) {
+                      console.error('Payment execution failed:', error);
+                      executeBtn.disabled = false;
+                      executeBtn.querySelector('.btn-text').textContent = '💸 Execute Payment';
+                  }
+              });
+          }
 
-          card.addEventListener('mouseleave', () => {
-              card.style.transform = 'perspective(1000px) rotateX(0) rotateY(0) translateY(0)';
-          });
 
           setTimeout(() => {
               card.style.opacity = '1';
@@ -1073,6 +1093,458 @@ const firebaseConfig = {
       }
 
       window.loadProposals = loadProposals;
+
+      const USE_TESTNET = true;
+      const HORIZON_URL = USE_TESTNET 
+          ? 'https://horizon-testnet.stellar.org'
+          : 'https://horizon.stellar.org';
+      
+      let treasuryWalletAddress = null;
+
+      function saveTreasuryWallet(address) {
+          localStorage.setItem('treasuryWalletAddress', address);
+          treasuryWalletAddress = address;
+      }
+
+      function loadTreasuryWallet() {
+          const saved = localStorage.getItem('treasuryWalletAddress');
+          if (saved) {
+              treasuryWalletAddress = saved;
+              return saved;
+          }
+          return null;
+      }
+
+      async function fetchTreasuryBalance(walletAddress) {
+          if (!walletAddress || !walletAddress.startsWith('G') || walletAddress.length !== 56) {
+              throw new Error('Invalid Stellar address format');
+          }
+
+          let retries = 3;
+          while (retries > 0) {
+              try {
+                  const controller = new AbortController();
+                  const timeoutId = setTimeout(() => controller.abort(), 10000);
+                  
+                  const response = await fetch(`${HORIZON_URL}/accounts/${walletAddress}`, {
+                      signal: controller.signal
+                  });
+                  
+                  clearTimeout(timeoutId);
+                  
+                  if (!response.ok) {
+                      if (response.status === 404) {
+                          throw new Error('Account not found. Fund this address to activate it on Stellar network.');
+                      }
+                      throw new Error(`Failed to fetch account data: ${response.status} ${response.statusText}`);
+                  }
+                  
+                  const accountData = await response.json();
+                  
+                  const xlmBalance = accountData.balances.find(b => b.asset_type === 'native');
+                  const balance = xlmBalance ? parseFloat(xlmBalance.balance) : 0;
+                  
+                  return {
+                      balance: balance,
+                      accountData: accountData
+                  };
+              } catch (error) {
+                  retries--;
+                  if (retries === 0) {
+                      console.error('Error fetching treasury balance after retries:', error);
+                      throw error;
+                  }
+                  console.warn(`Retrying treasury balance fetch... ${retries} attempts left`);
+                  await new Promise(resolve => setTimeout(resolve, 1000));
+              }
+          }
+      }
+
+      async function fetchRecentTransactions(walletAddress, limit = 5) {
+          if (!walletAddress || !walletAddress.startsWith('G') || walletAddress.length !== 56) {
+              throw new Error('Invalid Stellar address format');
+          }
+
+          let retries = 3;
+          while (retries > 0) {
+              try {
+                  const controller = new AbortController();
+                  const timeoutId = setTimeout(() => controller.abort(), 10000);
+                  
+                  const response = await fetch(
+                      `${HORIZON_URL}/accounts/${walletAddress}/transactions?order=desc&limit=${limit}`,
+                      { signal: controller.signal }
+                  );
+                  
+                  clearTimeout(timeoutId);
+                  
+                  if (!response.ok) {
+                      if (response.status === 404) {
+                          return [];
+                      }
+                      throw new Error(`Failed to fetch transactions: ${response.status} ${response.statusText}`);
+                  }
+                  
+                  const data = await response.json();
+                  return data._embedded.records;
+              } catch (error) {
+                  retries--;
+                  if (retries === 0) {
+                      console.error('Error fetching transactions after retries:', error);
+                      if (error.name === 'AbortError') {
+                          throw new Error('Request timeout. Please check your connection and try again.');
+                      }
+                      throw error;
+                  }
+                  console.warn(`Retrying transactions fetch... ${retries} attempts left`);
+                  await new Promise(resolve => setTimeout(resolve, 1000));
+              }
+          }
+      }
+
+      function displayBalance(balance) {
+          const balanceElement = document.getElementById('xlm-balance');
+          const balanceUsdElement = document.getElementById('xlm-balance-usd');
+          
+          balanceElement.textContent = `${balance.toLocaleString('en-US', {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 7
+          })} XLM`;
+          
+          const xlmPriceUsd = 0.12;
+          const usdValue = balance * xlmPriceUsd;
+          balanceUsdElement.textContent = `≈ $${usdValue.toLocaleString('en-US', {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2
+          })} USD`;
+      }
+
+      function displayTransactions(transactions) {
+          const container = document.getElementById('transactions-container');
+          
+          if (!transactions || transactions.length === 0) {
+              container.innerHTML = `
+                  <div class="empty-transactions">
+                      <div class="empty-transactions-icon">📭</div>
+                      <p>No transactions yet</p>
+                  </div>
+              `;
+              return;
+          }
+
+          const totalTxElement = document.getElementById('total-transactions');
+          if (totalTxElement) {
+              totalTxElement.textContent = transactions.length;
+          }
+
+          const lastTxAmount = document.getElementById('last-transaction-amount');
+          const lastTxTime = document.getElementById('last-transaction-time');
+          if (transactions.length > 0 && lastTxAmount && lastTxTime) {
+              lastTxAmount.textContent = 'Recent';
+              const txDate = new Date(transactions[0].created_at);
+              lastTxTime.textContent = formatTimeAgo(txDate);
+          }
+
+          container.innerHTML = transactions.map(tx => {
+              const txDate = new Date(tx.created_at);
+              const txType = tx.type || 'payment';
+              const explorerUrl = USE_TESTNET
+                  ? `https://testnet.stellarchain.io/transactions/${tx.hash}`
+                  : `https://stellarchain.io/transactions/${tx.hash}`;
+              
+              return `
+                  <div class="transaction-row">
+                      <div class="transaction-type transaction-type-${txType.toLowerCase()}">
+                          ${txType}
+                      </div>
+                      <div class="transaction-hash" title="${tx.hash}">
+                          ${tx.hash.substring(0, 16)}...${tx.hash.substring(tx.hash.length - 8)}
+                      </div>
+                      <div class="transaction-amount">
+                          Op: ${tx.operation_count}
+                      </div>
+                      <div class="transaction-time">
+                          ${formatTimeAgo(txDate)}
+                      </div>
+                      <div class="transaction-link">
+                          <a href="${explorerUrl}" target="_blank" title="View on Explorer">🔗</a>
+                      </div>
+                  </div>
+              `;
+          }).join('');
+      }
+
+      function formatTimeAgo(date) {
+          const seconds = Math.floor((new Date() - date) / 1000);
+          
+          if (seconds < 60) return `${seconds}s ago`;
+          if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
+          if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
+          if (seconds < 604800) return `${Math.floor(seconds / 86400)}d ago`;
+          return date.toLocaleDateString();
+      }
+
+      async function refreshTreasuryData() {
+          if (!treasuryWalletAddress) {
+              console.log('No treasury wallet set');
+              return;
+          }
+
+          try {
+              const refreshBtn = document.getElementById('refresh-balance-btn');
+              if (refreshBtn) {
+                  refreshBtn.style.animation = 'none';
+                  setTimeout(() => {
+                      refreshBtn.style.animation = '';
+                  }, 10);
+              }
+
+              const { balance, accountData } = await fetchTreasuryBalance(treasuryWalletAddress);
+              displayBalance(balance);
+
+              const transactions = await fetchRecentTransactions(treasuryWalletAddress);
+              displayTransactions(transactions);
+
+              const networkElement = document.getElementById('stellar-network');
+              if (networkElement) {
+                  networkElement.textContent = USE_TESTNET ? 'Testnet' : 'Mainnet';
+              }
+
+              showToast('Treasury data refreshed ✨', 'success');
+          } catch (error) {
+              console.error('Error refreshing treasury data:', error);
+              showToast('Failed to refresh treasury data', 'error');
+              
+              const balanceElement = document.getElementById('xlm-balance');
+              if (balanceElement) {
+                  balanceElement.innerHTML = '<span style="color: #ef4444;">Error loading</span>';
+              }
+          }
+      }
+
+      const setWalletBtn = document.getElementById('set-treasury-wallet-btn');
+      if (setWalletBtn) {
+          setWalletBtn.addEventListener('click', async () => {
+              const input = document.getElementById('treasury-wallet-input');
+              const address = input.value.trim();
+              
+              if (!address) {
+                  showToast('Please enter a wallet address', 'warning');
+                  return;
+              }
+
+              if (!address.startsWith('G') || address.length !== 56) {
+                  showToast('Invalid Stellar address format', 'error');
+                  return;
+              }
+
+              saveTreasuryWallet(address);
+              
+              const inputContainer = input.parentElement;
+              const savedContainer = document.getElementById('treasury-wallet-saved');
+              const savedAddress = savedContainer.querySelector('.wallet-saved-address');
+              
+              const shortAddr = `${address.substring(0, 8)}...${address.substring(address.length - 6)}`;
+              savedAddress.textContent = shortAddr;
+              savedAddress.title = address;
+              
+              inputContainer.style.display = 'none';
+              setWalletBtn.style.display = 'none';
+              savedContainer.style.display = 'flex';
+              
+              showToast('Treasury wallet set successfully! ✨', 'success');
+              
+              await refreshTreasuryData();
+          });
+      }
+
+      const changeWalletBtn = document.getElementById('change-treasury-wallet-btn');
+      if (changeWalletBtn) {
+          changeWalletBtn.addEventListener('click', () => {
+              const input = document.getElementById('treasury-wallet-input');
+              const setBtn = document.getElementById('set-treasury-wallet-btn');
+              const savedContainer = document.getElementById('treasury-wallet-saved');
+              
+              input.parentElement.style.display = 'flex';
+              setBtn.style.display = 'inline-block';
+              savedContainer.style.display = 'none';
+              
+              input.value = treasuryWalletAddress || '';
+              input.focus();
+          });
+      }
+
+      const refreshBalanceBtn = document.getElementById('refresh-balance-btn');
+      if (refreshBalanceBtn) {
+          refreshBalanceBtn.addEventListener('click', refreshTreasuryData);
+      }
+
+      const savedWallet = loadTreasuryWallet();
+      if (savedWallet) {
+          const input = document.getElementById('treasury-wallet-input');
+          const setBtn = document.getElementById('set-treasury-wallet-btn');
+          const savedContainer = document.getElementById('treasury-wallet-saved');
+          const savedAddress = savedContainer.querySelector('.wallet-saved-address');
+          
+          const shortAddr = `${savedWallet.substring(0, 8)}...${savedWallet.substring(savedWallet.length - 6)}`;
+          savedAddress.textContent = shortAddr;
+          savedAddress.title = savedWallet;
+          
+          if (input && setBtn && savedContainer) {
+              input.parentElement.style.display = 'none';
+              setBtn.style.display = 'none';
+              savedContainer.style.display = 'flex';
+          }
+          
+          setTimeout(() => {
+              refreshTreasuryData();
+          }, 1000);
+      }
+
+      async function executePayment(proposalId, proposalData) {
+          try {
+              if (!userWalletAddress) {
+                  showToast('Please connect your wallet first', 'warning');
+                  return;
+              }
+
+              if (!treasuryWalletAddress) {
+                  showToast('Treasury wallet not configured', 'error');
+                  return;
+              }
+
+              if (!window.freighterApi) {
+                  showToast('Freighter wallet not available', 'error');
+                  return;
+              }
+
+              if (!db) {
+                  showToast('Database not initialized', 'error');
+                  return;
+              }
+
+              showToast('Verifying proposal status...', 'success');
+
+              const { doc, getDoc, updateDoc } = window.firebaseModules;
+              const proposalRef = doc(db, 'proposals', proposalId);
+              const proposalSnap = await getDoc(proposalRef);
+
+              if (!proposalSnap.exists()) {
+                  showToast('Proposal not found', 'error');
+                  return;
+              }
+
+              const currentProposal = proposalSnap.data();
+              
+              if (currentProposal.status === 'executed') {
+                  showToast('Proposal already executed', 'warning');
+                  return;
+              }
+
+              const votesFor = currentProposal.votesFor || [];
+              const votesAgainst = currentProposal.votesAgainst || [];
+
+              if (votesFor.length <= votesAgainst.length) {
+                  showToast('Proposal has not passed (insufficient votes)', 'error');
+                  return;
+              }
+
+              await updateDoc(proposalRef, {
+                  status: 'executing',
+                  executionStartedAt: new Date().toISOString(),
+                  executionStartedBy: userWalletAddress
+              });
+
+              showToast('Preparing payment transaction...', 'success');
+
+              const server = new StellarSdk.Horizon.Server(HORIZON_URL);
+              const sourceAccount = await server.loadAccount(userWalletAddress);
+
+              const transaction = new StellarSdk.TransactionBuilder(sourceAccount, {
+                  fee: StellarSdk.BASE_FEE,
+                  networkPassphrase: USE_TESTNET 
+                      ? StellarSdk.Networks.TESTNET 
+                      : StellarSdk.Networks.PUBLIC
+              })
+              .addOperation(StellarSdk.Operation.payment({
+                  destination: currentProposal.recipient,
+                  asset: StellarSdk.Asset.native(),
+                  amount: currentProposal.amount.toString()
+              }))
+              .addMemo(StellarSdk.Memo.text(`DAO Proposal #${proposalId.substring(0, 8)}`))
+              .setTimeout(180)
+              .build();
+
+              const xdr = transaction.toXDR();
+
+              showToast('Please sign the transaction in Freighter...', 'success');
+
+              const signedXdr = await window.freighterApi.signTransaction(xdr, {
+                  networkPassphrase: USE_TESTNET 
+                      ? StellarSdk.Networks.TESTNET 
+                      : StellarSdk.Networks.PUBLIC
+              });
+
+              const signedTransaction = StellarSdk.TransactionBuilder.fromXDR(
+                  signedXdr,
+                  HORIZON_URL
+              );
+
+              showToast('Submitting transaction to Stellar network...', 'success');
+
+              const result = await server.submitTransaction(signedTransaction);
+
+              console.log('✅ Payment executed successfully!', result);
+
+              await updateDoc(proposalRef, {
+                  status: 'executed',
+                  executedAt: new Date().toISOString(),
+                  transactionHash: result.hash,
+                  executedBy: userWalletAddress
+              });
+
+              showToast(`Payment executed successfully! 🎉`, 'success');
+              
+              setTimeout(() => {
+                  refreshTreasuryData();
+              }, 2000);
+
+              return result;
+          } catch (error) {
+              console.error('❌ Payment execution error:', error);
+              
+              if (db) {
+                  try {
+                      const { doc, updateDoc } = window.firebaseModules;
+                      const proposalRef = doc(db, 'proposals', proposalId);
+                      await updateDoc(proposalRef, {
+                          status: 'active',
+                          executionError: error.message,
+                          executionFailedAt: new Date().toISOString()
+                      });
+                  } catch (rollbackError) {
+                      console.error('Failed to rollback proposal status:', rollbackError);
+                  }
+              }
+              
+              let errorMessage = 'Failed to execute payment';
+              
+              if (error.message) {
+                  if (error.message.includes('User declined')) {
+                      errorMessage = 'Transaction was declined';
+                  } else if (error.message.includes('insufficient')) {
+                      errorMessage = 'Insufficient balance';
+                  } else {
+                      errorMessage = error.message;
+                  }
+              }
+              
+              showToast(errorMessage, 'error');
+              throw error;
+          }
+      }
+
+      window.executePayment = executePayment;
 
   });
   
