@@ -20,38 +20,62 @@ const firebaseConfig = {
           
           console.log('✅ Firebase initialized successfully');
           
-          await testFirestoreConnection();
+          setTimeout(() => {
+              if (typeof window.loadProposals === 'function') {
+                  console.log('🔄 Initializing proposals listener...');
+                  window.loadProposals();
+              }
+          }, 500);
+          
+          testFirestoreConnection();
           
       } catch (error) {
           console.error('❌ Firebase initialization error:', error);
           showToast('Firebase Connection Failed', 'error');
+          
+          setTimeout(() => {
+              if (typeof window.loadProposals === 'function') {
+                  console.log('🔄 Attempting to load proposals despite error...');
+                  window.loadProposals();
+              }
+          }, 500);
       }
   }
   
   async function testFirestoreConnection() {
       try {
-          const { doc, setDoc, getDocs, collection } = window.firebaseModules;
+          const { doc, setDoc, getDocs, collection, getDoc } = window.firebaseModules;
           
-          const testDoc = doc(db, 'dao_config', 'treasury_info');
-          
-          await setDoc(testDoc, {
-              dao_name: 'Community Treasury',
-              created_at: new Date().toISOString(),
-              status: 'active'
-          });
-          
-          console.log('✅ Test document written successfully');
-          
-          const querySnapshot = await getDocs(collection(db, 'dao_config'));
-          querySnapshot.forEach((doc) => {
-              console.log('📄 Document ID:', doc.id);
-              console.log('📋 Document data:', doc.data());
-          });
-          
-          showToast('Connected to Firestore ✨', 'success');
+          try {
+              const querySnapshot = await getDocs(collection(db, 'dao_config'));
+              console.log(`✅ Firestore read access confirmed (${querySnapshot.size} documents)`);
+              
+              querySnapshot.forEach((doc) => {
+                  console.log('📄 Document ID:', doc.id);
+                  console.log('📋 Document data:', doc.data());
+              });
+              
+              showToast('Connected to Firestore ✨', 'success');
+              
+              try {
+                  const testDoc = doc(db, 'dao_config', 'treasury_info');
+                  await setDoc(testDoc, {
+                      dao_name: 'Community Treasury',
+                      created_at: new Date().toISOString(),
+                      status: 'active'
+                  });
+                  console.log('✅ Firestore write access confirmed');
+              } catch (writeError) {
+                  console.log('ℹ️ Firestore write not available (read-only mode)');
+                  console.log('   This is normal for production deployments');
+              }
+              
+          } catch (readError) {
+              throw readError;
+          }
           
       } catch (error) {
-          console.log('❌ Firestore error:', error.code || error.message);
+          console.error('❌ Firestore connection error:', error);
           console.log('');
           console.log('📋 TO FIX THIS ISSUE:');
           console.log('1. Open https://console.firebase.google.com');
@@ -61,7 +85,6 @@ const firebaseConfig = {
           console.log('5. Select TEST MODE for development');
           console.log('6. Choose your region and click Enable');
           console.log('');
-          console.log('📄 See FIREBASE_SETUP.md for detailed instructions');
           
           showToast('Firestore: Create database in Firebase Console', 'warning');
       }
@@ -727,5 +750,329 @@ const firebaseConfig = {
       }, 1000);
 
       console.log('🌟 Stellar SDK loaded:', typeof StellarSdk !== 'undefined' ? '✓' : '✗');
+
+      const modal = document.getElementById('create-proposal-modal');
+      const createProposalBtn = document.getElementById('create-proposal-btn');
+      const modalClose = document.getElementById('modal-close');
+      const modalCancel = document.getElementById('modal-cancel');
+      const proposalForm = document.getElementById('proposal-form');
+      const proposalsGrid = document.getElementById('proposals-grid');
+
+      function openModal() {
+          if (!userWalletAddress) {
+              showToast('Please connect your wallet first', 'warning');
+              return;
+          }
+          modal.style.display = 'flex';
+          document.body.style.overflow = 'hidden';
+      }
+
+      function closeModal() {
+          modal.style.display = 'none';
+          document.body.style.overflow = '';
+          proposalForm.reset();
+      }
+
+      if (createProposalBtn) {
+          createProposalBtn.addEventListener('click', openModal);
+      }
+
+      if (modalClose) {
+          modalClose.addEventListener('click', closeModal);
+      }
+
+      if (modalCancel) {
+          modalCancel.addEventListener('click', closeModal);
+      }
+
+      if (modal) {
+          modal.addEventListener('click', (e) => {
+              if (e.target.classList.contains('modal-overlay')) {
+                  closeModal();
+              }
+          });
+      }
+
+      if (proposalForm) {
+          proposalForm.addEventListener('submit', async (e) => {
+              e.preventDefault();
+              
+              if (!db) {
+                  showToast('Firestore not initialized', 'error');
+                  return;
+              }
+
+              if (!userWalletAddress) {
+                  showToast('Please connect your wallet first', 'warning');
+                  return;
+              }
+
+              const title = document.getElementById('proposal-title').value.trim();
+              const description = document.getElementById('proposal-description').value.trim();
+              const amount = parseFloat(document.getElementById('proposal-amount').value);
+              const recipient = document.getElementById('proposal-recipient').value.trim();
+
+              if (!title || !description || !amount || !recipient) {
+                  showToast('Please fill all fields', 'warning');
+                  return;
+              }
+
+              if (!recipient.startsWith('G') || recipient.length !== 56) {
+                  showToast('Invalid Stellar address', 'error');
+                  return;
+              }
+
+              try {
+                  const { collection, addDoc, serverTimestamp } = window.firebaseModules;
+
+                  const proposalData = {
+                      title: title,
+                      description: description,
+                      amount: amount,
+                      recipient: recipient,
+                      creator: userWalletAddress,
+                      votesFor: [],
+                      votesAgainst: [],
+                      status: 'active',
+                      createdAt: serverTimestamp(),
+                      updatedAt: serverTimestamp()
+                  };
+
+                  await addDoc(collection(db, 'proposals'), proposalData);
+                  
+                  showToast('Proposal created successfully! ✨', 'success');
+                  closeModal();
+                  
+              } catch (error) {
+                  console.error('Error creating proposal:', error);
+                  showToast('Failed to create proposal: ' + error.message, 'error');
+              }
+          });
+      }
+
+      async function voteOnProposal(proposalId, voteType) {
+          if (!db) {
+              showToast('Firestore not initialized', 'error');
+              return;
+          }
+
+          if (!userWalletAddress) {
+              showToast('Please connect your wallet to vote', 'warning');
+              return;
+          }
+
+          try {
+              const { doc, updateDoc, arrayUnion, arrayRemove } = window.firebaseModules;
+              const proposalRef = doc(db, 'proposals', proposalId);
+
+              if (voteType === 'for') {
+                  await updateDoc(proposalRef, {
+                      votesFor: arrayUnion(userWalletAddress),
+                      votesAgainst: arrayRemove(userWalletAddress)
+                  });
+                  showToast('Voted FOR! ✅', 'success');
+              } else {
+                  await updateDoc(proposalRef, {
+                      votesAgainst: arrayUnion(userWalletAddress),
+                      votesFor: arrayRemove(userWalletAddress)
+                  });
+                  showToast('Voted AGAINST! ❌', 'success');
+              }
+          } catch (error) {
+              console.error('Error voting:', error);
+              showToast('Failed to vote: ' + error.message, 'error');
+          }
+      }
+
+      function renderProposal(proposal, proposalId) {
+          const votesFor = proposal.votesFor || [];
+          const votesAgainst = proposal.votesAgainst || [];
+          const totalVotes = votesFor.length + votesAgainst.length;
+          const forPercentage = totalVotes > 0 ? Math.round((votesFor.length / totalVotes) * 100) : 0;
+          const againstPercentage = totalVotes > 0 ? Math.round((votesAgainst.length / totalVotes) * 100) : 0;
+
+          const hasVotedFor = userWalletAddress && votesFor.includes(userWalletAddress);
+          const hasVotedAgainst = userWalletAddress && votesAgainst.includes(userWalletAddress);
+          const hasVoted = hasVotedFor || hasVotedAgainst;
+
+          const shortRecipient = `${proposal.recipient.substring(0, 8)}...${proposal.recipient.substring(proposal.recipient.length - 6)}`;
+
+          const card = document.createElement('div');
+          card.className = 'proposal-card';
+          card.style.opacity = '0';
+          card.style.transform = 'translateY(30px)';
+          card.style.transition = 'opacity 0.6s cubic-bezier(0.4, 0, 0.2, 1), transform 0.6s cubic-bezier(0.4, 0, 0.2, 1)';
+          
+          card.innerHTML = `
+              <div class="proposal-header">
+                  <span class="proposal-status status-${proposal.status}">${proposal.status}</span>
+                  <span class="proposal-id">#${proposalId.substring(0, 6)}</span>
+              </div>
+              <h3 class="proposal-title">${proposal.title}</h3>
+              <p class="proposal-description">${proposal.description}</p>
+              <div class="proposal-stats">
+                  <div class="proposal-stat">
+                      <span class="stat-label">For</span>
+                      <span class="stat-value">${forPercentage}%</span>
+                  </div>
+                  <div class="proposal-stat">
+                      <span class="stat-label">Against</span>
+                      <span class="stat-value">${againstPercentage}%</span>
+                  </div>
+              </div>
+              <div class="proposal-progress">
+                  <div class="progress-bar" style="width: ${forPercentage}%"></div>
+              </div>
+              <div class="proposal-meta">
+                  <div>
+                      <div class="proposal-amount">💰 ${proposal.amount.toLocaleString()} XLM</div>
+                      <div class="proposal-recipient" title="${proposal.recipient}">→ ${shortRecipient}</div>
+                  </div>
+              </div>
+              <div class="vote-actions">
+                  <button class="vote-btn vote-btn-for ${hasVotedFor ? 'voted' : ''}" 
+                          data-proposal-id="${proposalId}" 
+                          data-vote-type="for"
+                          ${!userWalletAddress ? 'disabled' : ''}>
+                      👍 Vote For
+                  </button>
+                  <button class="vote-btn vote-btn-against ${hasVotedAgainst ? 'voted' : ''}" 
+                          data-proposal-id="${proposalId}" 
+                          data-vote-type="against"
+                          ${!userWalletAddress ? 'disabled' : ''}>
+                      👎 Vote Against
+                  </button>
+              </div>
+          `;
+
+          const voteButtons = card.querySelectorAll('.vote-btn');
+          voteButtons.forEach(btn => {
+              btn.addEventListener('click', () => {
+                  const proposalId = btn.dataset.proposalId;
+                  const voteType = btn.dataset.voteType;
+                  voteOnProposal(proposalId, voteType);
+              });
+          });
+
+          card.addEventListener('mousemove', (e) => {
+              const rect = card.getBoundingClientRect();
+              const x = e.clientX - rect.left;
+              const y = e.clientY - rect.top;
+              
+              const centerX = rect.width / 2;
+              const centerY = rect.height / 2;
+              
+              const rotateX = (y - centerY) / 20;
+              const rotateY = (centerX - x) / 20;
+              
+              card.style.transform = `perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) translateY(-12px)`;
+          });
+
+          card.addEventListener('mouseleave', () => {
+              card.style.transform = 'perspective(1000px) rotateX(0) rotateY(0) translateY(0)';
+          });
+
+          setTimeout(() => {
+              card.style.opacity = '1';
+              card.style.transform = 'translateY(0)';
+          }, 100);
+
+          const progressBar = card.querySelector('.progress-bar');
+          if (progressBar) {
+              const width = progressBar.style.width;
+              progressBar.style.width = '0';
+              setTimeout(() => {
+                  progressBar.style.width = width;
+              }, 200);
+          }
+
+          return card;
+      }
+
+      function loadProposals() {
+          if (!db) {
+              console.warn('⚠️ Firestore not initialized');
+              if (proposalsGrid) {
+                  proposalsGrid.innerHTML = `
+                      <div class="empty-proposals">
+                          <div class="empty-proposals-icon">📋</div>
+                          <div class="empty-proposals-text">Firestore not initialized. Please check console for setup instructions.</div>
+                      </div>
+                  `;
+              }
+              return;
+          }
+
+          if (!proposalsGrid) {
+              console.warn('⚠️ Proposals grid not found');
+              return;
+          }
+
+          try {
+              const { collection, onSnapshot } = window.firebaseModules;
+              
+              console.log('🔄 Setting up real-time proposals listener...');
+              
+              const proposalsCollection = collection(db, 'proposals');
+
+              onSnapshot(proposalsCollection, (snapshot) => {
+                  console.log(`📊 Proposals snapshot received: ${snapshot.size} documents`);
+                  proposalsGrid.innerHTML = '';
+                  
+                  if (snapshot.empty) {
+                      proposalsGrid.innerHTML = `
+                          <div class="empty-proposals">
+                              <div class="empty-proposals-icon">📋</div>
+                              <div class="empty-proposals-text">No proposals yet. Be the first to create one!</div>
+                          </div>
+                      `;
+                      return;
+                  }
+
+                  const proposalsArray = [];
+                  snapshot.forEach((doc) => {
+                      const proposal = doc.data();
+                      proposalsArray.push({ id: doc.id, data: proposal, timestamp: proposal.createdAt });
+                  });
+
+                  proposalsArray.sort((a, b) => {
+                      if (!a.timestamp || !b.timestamp) return 0;
+                      const aTime = a.timestamp.seconds || 0;
+                      const bTime = b.timestamp.seconds || 0;
+                      return bTime - aTime;
+                  });
+
+                  proposalsArray.forEach((item) => {
+                      const proposalCard = renderProposal(item.data, item.id);
+                      proposalsGrid.appendChild(proposalCard);
+                  });
+
+                  console.log(`✅ Loaded ${snapshot.size} proposals with real-time sync`);
+              }, (error) => {
+                  console.error('❌ Error in proposals listener:', error);
+                  console.error('Error code:', error.code);
+                  console.error('Error message:', error.message);
+                  
+                  proposalsGrid.innerHTML = `
+                      <div class="empty-proposals">
+                          <div class="empty-proposals-icon">⚠️</div>
+                          <div class="empty-proposals-text">Error loading proposals. Check console for details.</div>
+                      </div>
+                  `;
+              });
+              
+          } catch (error) {
+              console.error('❌ Error setting up proposals listener:', error);
+              proposalsGrid.innerHTML = `
+                  <div class="empty-proposals">
+                      <div class="empty-proposals-icon">⚠️</div>
+                      <div class="empty-proposals-text">Error loading proposals: ${error.message}</div>
+                  </div>
+              `;
+          }
+      }
+
+      window.loadProposals = loadProposals;
+
   });
   

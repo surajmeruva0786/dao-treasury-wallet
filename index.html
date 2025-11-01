@@ -86,73 +86,14 @@
 
         <section id="proposals" class="section proposals-section">
             <div class="container">
-                <h2 class="section-title">Active Proposals</h2>
-                <div class="proposals-grid">
-                    <div class="proposal-card">
-                        <div class="proposal-header">
-                            <span class="proposal-status status-active">Active</span>
-                            <span class="proposal-id">#001</span>
-                        </div>
-                        <h3 class="proposal-title">Allocate 500K for Marketing Campaign</h3>
-                        <p class="proposal-description">Proposal to allocate treasury funds for Q1 2025 marketing initiatives</p>
-                        <div class="proposal-stats">
-                            <div class="proposal-stat">
-                                <span class="stat-label">For</span>
-                                <span class="stat-value">78%</span>
-                            </div>
-                            <div class="proposal-stat">
-                                <span class="stat-label">Against</span>
-                                <span class="stat-value">22%</span>
-                            </div>
-                        </div>
-                        <div class="proposal-progress">
-                            <div class="progress-bar" style="width: 78%"></div>
-                        </div>
-                    </div>
-
-                    <div class="proposal-card">
-                        <div class="proposal-header">
-                            <span class="proposal-status status-active">Active</span>
-                            <span class="proposal-id">#002</span>
-                        </div>
-                        <h3 class="proposal-title">Fund Developer Grants Program</h3>
-                        <p class="proposal-description">Support ecosystem growth with developer incentives</p>
-                        <div class="proposal-stats">
-                            <div class="proposal-stat">
-                                <span class="stat-label">For</span>
-                                <span class="stat-value">92%</span>
-                            </div>
-                            <div class="proposal-stat">
-                                <span class="stat-label">Against</span>
-                                <span class="stat-value">8%</span>
-                            </div>
-                        </div>
-                        <div class="proposal-progress">
-                            <div class="progress-bar" style="width: 92%"></div>
-                        </div>
-                    </div>
-
-                    <div class="proposal-card">
-                        <div class="proposal-header">
-                            <span class="proposal-status status-pending">Pending</span>
-                            <span class="proposal-id">#003</span>
-                        </div>
-                        <h3 class="proposal-title">Upgrade Security Infrastructure</h3>
-                        <p class="proposal-description">Enhance wallet security with multi-sig implementation</p>
-                        <div class="proposal-stats">
-                            <div class="proposal-stat">
-                                <span class="stat-label">For</span>
-                                <span class="stat-value">65%</span>
-                            </div>
-                            <div class="proposal-stat">
-                                <span class="stat-label">Against</span>
-                                <span class="stat-value">35%</span>
-                            </div>
-                        </div>
-                        <div class="proposal-progress">
-                            <div class="progress-bar" style="width: 65%"></div>
-                        </div>
-                    </div>
+                <div class="proposals-header">
+                    <h2 class="section-title">Active Proposals</h2>
+                    <button class="btn btn-primary create-proposal-btn" id="create-proposal-btn">
+                        <span class="btn-text">✨ Create Proposal</span>
+                        <span class="btn-glow"></span>
+                    </button>
+                </div>
+                <div class="proposals-grid" id="proposals-grid">
                 </div>
             </div>
         </section>
@@ -197,6 +138,7 @@
     </footer>
 
     <div id="toast-container"></div>
+    
     <div id="freighter-warning" class="freighter-warning" style="display: none;">
         <div class="warning-content">
             <div class="warning-icon">⚠️</div>
@@ -212,11 +154,84 @@
         </div>
     </div>
 
+    <div id="create-proposal-modal" class="modal" style="display: none;">
+        <div class="modal-overlay"></div>
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title">
+                    <span class="gradient-text">Create Proposal</span>
+                </h2>
+                <button class="modal-close" id="modal-close">×</button>
+            </div>
+            <form id="proposal-form" class="proposal-form">
+                <div class="form-group">
+                    <label for="proposal-title" class="form-label">Proposal Title</label>
+                    <input 
+                        type="text" 
+                        id="proposal-title" 
+                        class="form-input" 
+                        placeholder="Enter proposal title..."
+                        required
+                        maxlength="100"
+                    />
+                </div>
+                
+                <div class="form-group">
+                    <label for="proposal-description" class="form-label">Description</label>
+                    <textarea 
+                        id="proposal-description" 
+                        class="form-textarea" 
+                        placeholder="Describe your proposal in detail..."
+                        required
+                        rows="4"
+                        maxlength="500"
+                    ></textarea>
+                </div>
+                
+                <div class="form-group">
+                    <label for="proposal-amount" class="form-label">Requested Amount (XLM)</label>
+                    <input 
+                        type="number" 
+                        id="proposal-amount" 
+                        class="form-input" 
+                        placeholder="0.00"
+                        required
+                        min="0"
+                        step="0.01"
+                    />
+                </div>
+                
+                <div class="form-group">
+                    <label for="proposal-recipient" class="form-label">Recipient Stellar Address</label>
+                    <input 
+                        type="text" 
+                        id="proposal-recipient" 
+                        class="form-input" 
+                        placeholder="G..."
+                        required
+                        pattern="G[A-Z0-9]{55}"
+                        title="Must be a valid Stellar address starting with G"
+                    />
+                </div>
+                
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary modal-cancel" id="modal-cancel">
+                        <span class="btn-text">Cancel</span>
+                    </button>
+                    <button type="submit" class="btn btn-primary modal-submit">
+                        <span class="btn-text">Create Proposal</span>
+                        <span class="btn-glow"></span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <script type="module">
         import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
-        import { getFirestore, collection, addDoc, getDocs, doc, setDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+        import { getFirestore, collection, addDoc, getDocs, doc, setDoc, onSnapshot, updateDoc, arrayUnion, arrayRemove, query, orderBy, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
         
-        window.firebaseModules = { initializeApp, getFirestore, collection, addDoc, getDocs, doc, setDoc };
+        window.firebaseModules = { initializeApp, getFirestore, collection, addDoc, getDocs, doc, setDoc, onSnapshot, updateDoc, arrayUnion, arrayRemove, query, orderBy, serverTimestamp };
     </script>
     <script src="script.js"></script>
 </body>

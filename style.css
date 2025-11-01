@@ -1209,3 +1209,376 @@ body::before {
         width: 100%;
     }
 }
+
+.proposals-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 4rem;
+    flex-wrap: wrap;
+    gap: 2rem;
+}
+
+.proposals-header .section-title {
+    margin-bottom: 0;
+}
+
+.create-proposal-btn {
+    white-space: nowrap;
+}
+
+.modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 10000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: modalFadeIn 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes modalFadeIn {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+.modal-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.85);
+    backdrop-filter: blur(20px);
+    z-index: 1;
+}
+
+.modal-content {
+    position: relative;
+    z-index: 2;
+    background: rgba(10, 10, 15, 0.95);
+    backdrop-filter: blur(40px) saturate(180%);
+    border: 1px solid var(--border-color);
+    border-radius: 24px;
+    max-width: 600px;
+    width: 90%;
+    max-height: 90vh;
+    overflow-y: auto;
+    box-shadow: 0 25px 80px rgba(99, 102, 241, 0.4);
+    animation: modalSlideUp 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes modalSlideUp {
+    from {
+        transform: translateY(50px) scale(0.95);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0) scale(1);
+        opacity: 1;
+    }
+}
+
+.modal-content::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, var(--primary-color), var(--secondary-color), var(--accent-color));
+    border-radius: 24px 24px 0 0;
+}
+
+.modal-header {
+    padding: 2.5rem 2.5rem 1.5rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.modal-title {
+    font-size: 2rem;
+    font-weight: 900;
+    margin: 0;
+    letter-spacing: -0.02em;
+}
+
+.modal-close {
+    background: rgba(99, 102, 241, 0.1);
+    border: 1px solid var(--primary-color);
+    border-radius: 12px;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2rem;
+    color: var(--text-primary);
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.modal-close:hover {
+    background: rgba(99, 102, 241, 0.2);
+    transform: rotate(90deg) scale(1.1);
+    box-shadow: 0 0 20px rgba(99, 102, 241, 0.5);
+}
+
+.proposal-form {
+    padding: 2.5rem;
+}
+
+.form-group {
+    margin-bottom: 2rem;
+}
+
+.form-label {
+    display: block;
+    color: var(--text-secondary);
+    font-weight: 600;
+    font-size: 0.95rem;
+    margin-bottom: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.form-input,
+.form-textarea {
+    width: 100%;
+    background: rgba(99, 102, 241, 0.05);
+    border: 1.5px solid var(--border-color);
+    border-radius: 12px;
+    padding: 1rem 1.25rem;
+    color: var(--text-primary);
+    font-size: 1rem;
+    font-family: inherit;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    resize: none;
+}
+
+.form-input:focus,
+.form-textarea:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    background: rgba(99, 102, 241, 0.1);
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1), 0 0 20px rgba(99, 102, 241, 0.2);
+}
+
+.form-input::placeholder,
+.form-textarea::placeholder {
+    color: var(--text-secondary);
+    opacity: 0.5;
+}
+
+.modal-actions {
+    display: flex;
+    gap: 1rem;
+    justify-content: flex-end;
+    margin-top: 2.5rem;
+}
+
+.modal-actions .btn {
+    min-width: 140px;
+}
+
+.vote-actions {
+    display: flex;
+    gap: 1rem;
+    margin-top: 1.5rem;
+}
+
+.vote-btn {
+    flex: 1;
+    position: relative;
+    padding: 1rem 1.5rem;
+    font-size: 0.95rem;
+    font-weight: 700;
+    border: none;
+    border-radius: 12px;
+    cursor: pointer;
+    overflow: hidden;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    letter-spacing: -0.01em;
+    text-transform: uppercase;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+}
+
+.vote-btn-for {
+    background: linear-gradient(135deg, #22c55e, #10b981);
+    color: white;
+    border: 1px solid rgba(34, 197, 94, 0.5);
+    box-shadow: 0 4px 20px rgba(34, 197, 94, 0.3);
+}
+
+.vote-btn-for::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+    transition: left 0.6s ease;
+}
+
+.vote-btn-for:hover::before {
+    left: 100%;
+}
+
+.vote-btn-for:hover {
+    transform: translateY(-3px) scale(1.05);
+    box-shadow: 0 8px 30px rgba(34, 197, 94, 0.5);
+}
+
+.vote-btn-for:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.vote-btn-against {
+    background: linear-gradient(135deg, #ef4444, #dc2626);
+    color: white;
+    border: 1px solid rgba(239, 68, 68, 0.5);
+    box-shadow: 0 4px 20px rgba(239, 68, 68, 0.3);
+}
+
+.vote-btn-against::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+    transition: left 0.6s ease;
+}
+
+.vote-btn-against:hover::before {
+    left: 100%;
+}
+
+.vote-btn-against:hover {
+    transform: translateY(-3px) scale(1.05);
+    box-shadow: 0 8px 30px rgba(239, 68, 68, 0.5);
+}
+
+.vote-btn-against:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.vote-btn.voted {
+    opacity: 0.7;
+    cursor: default;
+    border-width: 2px;
+}
+
+.vote-btn.voted::after {
+    content: '✓';
+    font-size: 1.2rem;
+    margin-left: 0.25rem;
+}
+
+.proposal-meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 1.5rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--border-color);
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+    gap: 1rem;
+}
+
+.proposal-amount {
+    font-weight: 700;
+    color: var(--primary-color);
+    font-size: 1.1rem;
+}
+
+.proposal-recipient {
+    font-family: 'Courier New', monospace;
+    font-size: 0.8rem;
+    background: rgba(99, 102, 241, 0.1);
+    padding: 0.5rem 0.75rem;
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+    word-break: break-all;
+}
+
+.empty-proposals {
+    text-align: center;
+    padding: 5rem 2rem;
+    color: var(--text-secondary);
+}
+
+.empty-proposals-icon {
+    font-size: 5rem;
+    margin-bottom: 1.5rem;
+    opacity: 0.3;
+}
+
+.empty-proposals-text {
+    font-size: 1.2rem;
+    margin-bottom: 2rem;
+}
+
+@media (max-width: 768px) {
+    .proposals-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    
+    .proposals-header .section-title {
+        text-align: left;
+    }
+    
+    .create-proposal-btn {
+        width: 100%;
+    }
+    
+    .modal-content {
+        width: 95%;
+        max-height: 95vh;
+    }
+    
+    .modal-header {
+        padding: 2rem 1.5rem 1rem;
+    }
+    
+    .proposal-form {
+        padding: 1.5rem;
+    }
+    
+    .modal-actions {
+        flex-direction: column;
+    }
+    
+    .modal-actions .btn {
+        width: 100%;
+    }
+    
+    .vote-actions {
+        flex-direction: column;
+    }
+    
+    .proposal-meta {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+}
