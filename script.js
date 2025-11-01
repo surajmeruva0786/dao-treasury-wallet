@@ -1120,35 +1120,82 @@ const firebaseConfig = {
               throw new Error('Invalid Stellar address format');
           }
 
+          console.log(`🔍 Fetching balance for address: ${walletAddress}`);
+          console.log(`🌐 Using Horizon URL: ${HORIZON_URL}`);
+          console.log(`📡 Network: ${USE_TESTNET ? 'TESTNET' : 'MAINNET'}`);
+
           let retries = 3;
           while (retries > 0) {
               try {
                   const controller = new AbortController();
                   const timeoutId = setTimeout(() => controller.abort(), 10000);
                   
-                  const response = await fetch(`${HORIZON_URL}/accounts/${walletAddress}`, {
+                  const url = `${HORIZON_URL}/accounts/${walletAddress}`;
+                  console.log(`📡 Fetching: ${url}`);
+                  
+                  const response = await fetch(url, {
                       signal: controller.signal
                   });
                   
                   clearTimeout(timeoutId);
                   
+                  console.log(`📊 Response status: ${response.status} ${response.statusText}`);
+                  
                   if (!response.ok) {
                       if (response.status === 404) {
-                          throw new Error('Account not found. Fund this address to activate it on Stellar network.');
+                          // Account not found - check if it might be on the wrong network
+                          console.log('ℹ️ Account not found on current network');
+                          console.log(`   Address: ${walletAddress}`);
+                          console.log(`   Network: ${USE_TESTNET ? 'TESTNET' : 'MAINNET'}`);
+                          console.log(`   ⚠️  If you have funds, make sure you're on the correct network!`);
+                          
+                          // Try to provide helpful error message
+                          const errorText = await response.text().catch(() => '');
+                          console.log('   Response:', errorText);
+                          
+                          return {
+                              balance: 0,
+                              accountData: null,
+                              accountNotFound: true,
+                              errorMessage: `Account not found on ${USE_TESTNET ? 'TESTNET' : 'MAINNET'}. Make sure you're checking the correct network.`
+                          };
                       }
-                      throw new Error(`Failed to fetch account data: ${response.status} ${response.statusText}`);
+                      // For other errors, retry
+                      if (retries > 1) {
+                          throw new Error(`Failed to fetch account data: ${response.status} ${response.statusText}`);
+                      } else {
+                          throw new Error(`Failed to fetch account data: ${response.status} ${response.statusText}`);
+                      }
                   }
                   
                   const accountData = await response.json();
                   
+                  console.log('✅ Account found! Account ID:', accountData.id);
+                  
                   const xlmBalance = accountData.balances.find(b => b.asset_type === 'native');
                   const balance = xlmBalance ? parseFloat(xlmBalance.balance) : 0;
                   
+                  console.log(`💰 XLM Balance: ${balance} XLM`);
+                  console.log(`📊 Total balances:`, accountData.balances.length);
+                  
                   return {
                       balance: balance,
-                      accountData: accountData
+                      accountData: accountData,
+                      accountNotFound: false
                   };
               } catch (error) {
+                  // Don't retry on 404 or abort errors
+                  if (error.message && error.message.includes('404')) {
+                      return {
+                          balance: 0,
+                          accountData: null,
+                          accountNotFound: true
+                      };
+                  }
+                  if (error.name === 'AbortError') {
+                      throw new Error('Request timeout. Please check your connection and try again.');
+                  }
+                  
                   retries--;
                   if (retries === 0) {
                       console.error('Error fetching treasury balance after retries:', error);
@@ -1180,20 +1227,25 @@ const firebaseConfig = {
                   
                   if (!response.ok) {
                       if (response.status === 404) {
+                          // Account not found - return empty array, don't retry
                           return [];
+                      }
+                      if (retries === 1) {
+                          throw new Error(`Failed to fetch transactions: ${response.status} ${response.statusText}`);
                       }
                       throw new Error(`Failed to fetch transactions: ${response.status} ${response.statusText}`);
                   }
                   
                   const data = await response.json();
-                  return data._embedded.records;
+                  return data._embedded?.records || [];
               } catch (error) {
+                  if (error.name === 'AbortError') {
+                      throw new Error('Request timeout. Please check your connection and try again.');
+                  }
+                  
                   retries--;
                   if (retries === 0) {
                       console.error('Error fetching transactions after retries:', error);
-                      if (error.name === 'AbortError') {
-                          throw new Error('Request timeout. Please check your connection and try again.');
-                      }
                       throw error;
                   }
                   console.warn(`Retrying transactions fetch... ${retries} attempts left`);
@@ -1202,22 +1254,28 @@ const firebaseConfig = {
           }
       }
 
-      function displayBalance(balance) {
-          const balanceElement = document.getElementById('xlm-balance');
-          const balanceUsdElement = document.getElementById('xlm-balance-usd');
-          
-          balanceElement.textContent = `${balance.toLocaleString('en-US', {
-              minimumFractionDigits: 2,
-              maximumFractionDigits: 7
-          })} XLM`;
-          
-          const xlmPriceUsd = 0.12;
-          const usdValue = balance * xlmPriceUsd;
-          balanceUsdElement.textContent = `≈ $${usdValue.toLocaleString('en-US', {
-              minimumFractionDigits: 2,
-              maximumFractionDigits: 2
-          })} USD`;
-      }
+          function displayBalance(balance, accountNotFound = false) {
+              const balanceElement = document.getElementById('xlm-balance');
+              const balanceUsdElement = document.getElementById('xlm-balance-usd');
+              
+              if (accountNotFound) {
+                  balanceElement.innerHTML = '<span style="color: #fbbf24; font-size: 0.9rem;">Account not funded yet</span>';
+                  balanceUsdElement.innerHTML = '<span style="color: #9ca3af; font-size: 0.85rem;">Fund this address to activate</span>';
+                  return;
+              }
+              
+              balanceElement.textContent = `${balance.toLocaleString('en-US', {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 7
+              })} XLM`;
+              
+              const xlmPriceUsd = 0.12;
+              const usdValue = balance * xlmPriceUsd;
+              balanceUsdElement.textContent = `≈ $${usdValue.toLocaleString('en-US', {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2
+              })} USD`;
+          }
 
       function displayTransactions(transactions) {
           const container = document.getElementById('transactions-container');
@@ -1284,43 +1342,94 @@ const firebaseConfig = {
           return date.toLocaleDateString();
       }
 
-      async function refreshTreasuryData() {
-          if (!treasuryWalletAddress) {
-              console.log('No treasury wallet set');
-              return;
+          async function refreshTreasuryData() {
+              if (!treasuryWalletAddress) {
+                  console.log('ℹ️ No treasury wallet set');
+                  const balanceElement = document.getElementById('xlm-balance');
+                  if (balanceElement) {
+                      balanceElement.innerHTML = '<span style="color: #9ca3af;">Set treasury wallet address first</span>';
+                  }
+                  return;
+              }
+
+              console.log(`💰 Refreshing treasury data for: ${treasuryWalletAddress}`);
+
+              try {
+                  const refreshBtn = document.getElementById('refresh-balance-btn');
+                  if (refreshBtn) {
+                      refreshBtn.style.animation = 'none';
+                      setTimeout(() => {
+                          refreshBtn.style.animation = '';
+                      }, 10);
+                  }
+
+                  const result = await fetchTreasuryBalance(treasuryWalletAddress);
+                  
+                  console.log('📊 Balance fetch result:', result);
+                  
+                  displayBalance(result.balance, result.accountNotFound);
+                  
+                  if (result.errorMessage) {
+                      console.warn('⚠️', result.errorMessage);
+                  }
+
+                  // Only fetch transactions if account exists
+                  if (!result.accountNotFound) {
+                      try {
+                          const transactions = await fetchRecentTransactions(treasuryWalletAddress);
+                          displayTransactions(transactions);
+                      } catch (txError) {
+                          console.warn('Could not fetch transactions:', txError);
+                          // Don't show error, just log it
+                      }
+                  } else {
+                      // Show empty state for unfunded account
+                      const container = document.getElementById('transactions-container');
+                      if (container) {
+                          container.innerHTML = `
+                              <div class="empty-transactions">
+                                  <div class="empty-transactions-icon">💡</div>
+                                  <p>Account needs to be funded first</p>
+                                  ${result.errorMessage ? `<p style="margin-top: 0.5rem; color: #fbbf24; font-size: 0.9rem;">${result.errorMessage}</p>` : ''}
+                              </div>
+                          `;
+                      }
+                      
+                      let toastMessage = 'Account not found on ' + (USE_TESTNET ? 'TESTNET' : 'MAINNET');
+                      if (result.errorMessage) {
+                          toastMessage += '. Make sure you\'re checking the correct network.';
+                      } else {
+                          toastMessage += '. Please fund this address first.';
+                      }
+                      showToast(toastMessage, 'warning');
+                      return; // Don't show success toast
+                  }
+
+                  const networkElement = document.getElementById('stellar-network');
+                  if (networkElement) {
+                      networkElement.textContent = USE_TESTNET ? 'Testnet' : 'Mainnet';
+                  }
+
+                  showToast('Treasury data refreshed ✨', 'success');
+              } catch (error) {
+                  console.error('Error refreshing treasury data:', error);
+                  
+                  // More specific error messages
+                  let errorMessage = 'Failed to refresh treasury data';
+                  if (error.message && error.message.includes('timeout')) {
+                      errorMessage = 'Request timeout. Please try again.';
+                  } else if (error.message && error.message.includes('network')) {
+                      errorMessage = 'Network error. Please check your connection.';
+                  }
+                  
+                  showToast(errorMessage, 'error');
+                  
+                  const balanceElement = document.getElementById('xlm-balance');
+                  if (balanceElement) {
+                      balanceElement.innerHTML = '<span style="color: #ef4444;">Error loading</span>';
+                  }
+              }
           }
-
-          try {
-              const refreshBtn = document.getElementById('refresh-balance-btn');
-              if (refreshBtn) {
-                  refreshBtn.style.animation = 'none';
-                  setTimeout(() => {
-                      refreshBtn.style.animation = '';
-                  }, 10);
-              }
-
-              const { balance, accountData } = await fetchTreasuryBalance(treasuryWalletAddress);
-              displayBalance(balance);
-
-              const transactions = await fetchRecentTransactions(treasuryWalletAddress);
-              displayTransactions(transactions);
-
-              const networkElement = document.getElementById('stellar-network');
-              if (networkElement) {
-                  networkElement.textContent = USE_TESTNET ? 'Testnet' : 'Mainnet';
-              }
-
-              showToast('Treasury data refreshed ✨', 'success');
-          } catch (error) {
-              console.error('Error refreshing treasury data:', error);
-              showToast('Failed to refresh treasury data', 'error');
-              
-              const balanceElement = document.getElementById('xlm-balance');
-              if (balanceElement) {
-                  balanceElement.innerHTML = '<span style="color: #ef4444;">Error loading</span>';
-              }
-          }
-      }
 
       const setWalletBtn = document.getElementById('set-treasury-wallet-btn');
       if (setWalletBtn) {
