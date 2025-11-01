@@ -422,5 +422,145 @@ const firebaseConfig = {
               }
           });
       });
+
+      let userWalletAddress = null;
+
+      async function checkFreighterInstalled() {
+          return new Promise((resolve) => {
+              const maxAttempts = 20;
+              const delay = 100;
+              let attempts = 0;
+              
+              const checkInterval = setInterval(() => {
+                  attempts++;
+                  
+                  if (window.freighterApi) {
+                      clearInterval(checkInterval);
+                      console.log('✅ Freighter API found');
+                      resolve(true);
+                  } else if (attempts >= maxAttempts) {
+                      clearInterval(checkInterval);
+                      console.log('❌ Freighter API not found after', maxAttempts, 'attempts');
+                      resolve(false);
+                  }
+              }, delay);
+          });
+      }
+
+      async function connectFreighterWallet() {
+          try {
+              const isInstalled = await checkFreighterInstalled();
+              
+              if (!isInstalled) {
+                  showFreighterWarning();
+                  return;
+              }
+
+              showToast('Requesting wallet access...', 'success');
+
+              const publicKey = await window.freighterApi.getPublicKey();
+              
+              if (publicKey) {
+                  userWalletAddress = publicKey;
+                  
+                  const shortAddress = `${publicKey.substring(0, 6)}...${publicKey.substring(publicKey.length - 4)}`;
+                  
+                  const walletDisplay = document.getElementById('wallet-display');
+                  const walletText = walletDisplay.querySelector('.wallet-text');
+                  walletText.textContent = shortAddress;
+                  walletText.title = publicKey;
+                  
+                  walletDisplay.style.display = 'flex';
+                  
+                  const connectBtn = document.getElementById('connect-wallet-btn');
+                  connectBtn.style.display = 'none';
+                  
+                  await saveWalletToFirestore(publicKey);
+                  
+                  showToast(`Connected: ${shortAddress}`, 'success');
+                  
+                  console.log('✅ Wallet connected:', publicKey);
+                  console.log('📊 Network:', await window.freighterApi.getNetwork());
+              }
+              
+          } catch (error) {
+              console.error('❌ Freighter connection error:', error);
+              if (error.message && error.message.includes('User declined')) {
+                  showToast('Connection request declined', 'warning');
+              } else {
+                  showToast('Failed to connect wallet', 'error');
+              }
+          }
+      }
+
+      async function saveWalletToFirestore(publicKey) {
+          try {
+              if (!db) {
+                  console.warn('Firestore not initialized');
+                  return;
+              }
+
+              const { doc, setDoc } = window.firebaseModules;
+              
+              const userDoc = doc(db, 'users', publicKey);
+              
+              await setDoc(userDoc, {
+                  wallet_address: publicKey,
+                  connected_at: new Date().toISOString(),
+                  last_seen: new Date().toISOString(),
+                  network: await window.freighterApi.getNetwork()
+              }, { merge: true });
+              
+              console.log('✅ Wallet saved to Firestore');
+              
+          } catch (error) {
+              console.error('❌ Error saving to Firestore:', error);
+          }
+      }
+
+      function showFreighterWarning() {
+          const warning = document.getElementById('freighter-warning');
+          warning.style.display = 'flex';
+      }
+
+      function hideFreighterWarning() {
+          const warning = document.getElementById('freighter-warning');
+          warning.style.display = 'none';
+      }
+
+      const walletBtn = document.getElementById('connect-wallet-btn');
+      if (walletBtn) {
+          walletBtn.addEventListener('click', (e) => {
+              e.preventDefault();
+              connectFreighterWallet();
+          });
+      }
+
+      const warningClose = document.getElementById('warning-close');
+      if (warningClose) {
+          warningClose.addEventListener('click', hideFreighterWarning);
+      }
+
+      const freighterWarning = document.getElementById('freighter-warning');
+      if (freighterWarning) {
+          freighterWarning.addEventListener('click', (e) => {
+              if (e.target === freighterWarning) {
+                  hideFreighterWarning();
+              }
+          });
+      }
+
+      setTimeout(async () => {
+          const isInstalled = await checkFreighterInstalled();
+          if (isInstalled) {
+              console.log('✅ Freighter wallet detected and ready');
+              showToast('Freighter wallet detected! Click "Connect Wallet" to link your account.', 'success');
+          } else {
+              console.log('⚠️ Freighter wallet not detected');
+              console.log('💡 Install Freighter from https://www.freighter.app/');
+          }
+      }, 500);
+
+      console.log('🌟 Stellar SDK loaded:', typeof StellarSdk !== 'undefined' ? '✓' : '✗');
   });
   

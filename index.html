@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>DAO Treasury Wallet</title>
     <link rel="stylesheet" href="style.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/stellar-sdk/13.3.0/stellar-sdk.min.js"></script>
 </head>
 <body>
     <div class="grid-background"></div>
@@ -22,7 +23,11 @@
                 <li><a href="#home" class="nav-link active">Home</a></li>
                 <li><a href="#proposals" class="nav-link">Proposals</a></li>
                 <li><a href="#treasury" class="nav-link">Treasury</a></li>
-                <li><a href="#" class="connect-wallet-btn">
+                <li id="wallet-display" class="wallet-address" style="display: none;">
+                    <span class="wallet-icon">🔒</span>
+                    <span class="wallet-text"></span>
+                </li>
+                <li><a href="#" class="connect-wallet-btn" id="connect-wallet-btn">
                     <span class="btn-text">Connect Wallet</span>
                     <span class="btn-glow"></span>
                 </a></li>
@@ -191,6 +196,20 @@
     </footer>
 
     <div id="toast-container"></div>
+    <div id="freighter-warning" class="freighter-warning" style="display: none;">
+        <div class="warning-content">
+            <div class="warning-icon">⚠️</div>
+            <div class="warning-text">
+                <h3>Freighter Wallet Not Detected</h3>
+                <p>Please install the Freighter browser extension to connect your Stellar wallet.</p>
+                <a href="https://www.freighter.app/" target="_blank" class="btn btn-primary install-btn">
+                    <span class="btn-text">Install Freighter</span>
+                    <span class="btn-glow"></span>
+                </a>
+            </div>
+            <button class="warning-close" id="warning-close">×</button>
+        </div>
+    </div>
 
     <script type="module">
         import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
