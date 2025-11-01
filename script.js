@@ -426,39 +426,152 @@ const firebaseConfig = {
       let userWalletAddress = null;
 
       async function checkFreighterInstalled() {
-          return new Promise((resolve) => {
-              const maxAttempts = 20;
-              const delay = 100;
-              let attempts = 0;
+          // Wait for the Freighter API library to load
+          // The API might be exposed as window.freighterApi or through a module
+          let freighterApi = window.freighterApi;
+          
+          // Wait for the script to load if not available yet
+          if (!freighterApi) {
+              await new Promise((resolve) => {
+                  const maxAttempts = 30;
+                  let attempts = 0;
+                  const check = setInterval(() => {
+                      attempts++;
+                      freighterApi = window.freighterApi;
+                      if (freighterApi || attempts >= maxAttempts) {
+                          clearInterval(check);
+                          resolve();
+                      }
+                  }, 100);
+              });
+          }
+          
+          if (!freighterApi) {
+              return false;
+          }
+          
+          // Check if we can communicate with the extension
+          try {
+              // Try to use isConnected() if available
+              if (typeof freighterApi.isConnected === 'function') {
+                  const connectionStatus = await freighterApi.isConnected();
+                  // If we get a response (even if not connected), extension is installed
+                  return connectionStatus !== undefined;
+              }
               
-              const checkInterval = setInterval(() => {
-                  attempts++;
-                  
-                  if (window.freighterApi) {
-                      clearInterval(checkInterval);
-                      console.log('✅ Freighter API found');
-                      resolve(true);
-                  } else if (attempts >= maxAttempts) {
-                      clearInterval(checkInterval);
-                      console.log('❌ Freighter API not found after', maxAttempts, 'attempts');
-                      resolve(false);
-                  }
-              }, delay);
-          });
+              // Fallback: check if getAddress method exists (newer API)
+              // Note: getAddress will throw if extension not installed
+              if (typeof freighterApi.getAddress === 'function') {
+                  // Just checking if method exists means API is loaded
+                  return true;
+              }
+              
+              return false;
+          } catch (error) {
+              // If methods exist but throw errors, extension might be installed
+              // but not connected - still return true if API is available
+              return typeof freighterApi.getAddress === 'function' ||
+                     typeof freighterApi.isConnected === 'function';
+          }
       }
 
       async function connectFreighterWallet() {
           try {
+              // Check if Freighter is installed
               const isInstalled = await checkFreighterInstalled();
               
-              if (!isInstalled) {
+              if (!isInstalled || !window.freighterApi) {
                   showFreighterWarning();
                   return;
               }
 
               showToast('Requesting wallet access...', 'success');
 
-              const publicKey = await window.freighterApi.getPublicKey();
+              // Request access to the wallet first (if needed)
+              let isAllowed = false;
+              try {
+                  if (typeof window.freighterApi.isAllowed === 'function') {
+                      const allowed = await window.freighterApi.isAllowed();
+                      isAllowed = allowed === true || allowed?.isAllowed === true;
+                  }
+                  
+                  if (!isAllowed && typeof window.freighterApi.requestAccess === 'function') {
+                      console.log('🔐 Requesting wallet access...');
+                      await window.freighterApi.requestAccess();
+                  } else if (typeof window.freighterApi.setAllowed === 'function') {
+                      // Alternative method to set permissions
+                      await window.freighterApi.setAllowed();
+                  }
+              } catch (accessError) {
+                  console.log('Access request:', accessError.message || 'already has access');
+                  // Continue anyway - might already have access
+              }
+
+              // Get wallet address from Freighter (new API uses getAddress instead of getPublicKey)
+              let publicKey;
+              let addressResponse;
+              
+              if (typeof window.freighterApi.getAddress === 'function') {
+                  addressResponse = await window.freighterApi.getAddress();
+                  console.log('🔍 getAddress response:', addressResponse, 'type:', typeof addressResponse);
+                  
+                  // Handle different response formats
+                  if (typeof addressResponse === 'string') {
+                      publicKey = addressResponse;
+                  } else if (addressResponse && typeof addressResponse === 'object') {
+                      // Try common property names
+                      publicKey = addressResponse.address || 
+                                  addressResponse.publicKey || 
+                                  addressResponse.pubKey ||
+                                  addressResponse.wallet ||
+                                  (Array.isArray(addressResponse) ? addressResponse[0] : null);
+                      
+                      // If still not a string, try converting
+                      if (publicKey && typeof publicKey !== 'string') {
+                          publicKey = String(publicKey);
+                      }
+                  } else {
+                      publicKey = addressResponse;
+                  }
+              } else if (typeof window.freighterApi.getPublicKey === 'function') {
+                  // Fallback for older API versions
+                  addressResponse = await window.freighterApi.getPublicKey();
+                  console.log('🔍 getPublicKey response:', addressResponse, 'type:', typeof addressResponse);
+                  
+                  if (typeof addressResponse === 'string') {
+                      publicKey = addressResponse;
+                  } else if (addressResponse && typeof addressResponse === 'object') {
+                      publicKey = addressResponse.address || 
+                                  addressResponse.publicKey || 
+                                  addressResponse.pubKey ||
+                                  (Array.isArray(addressResponse) ? addressResponse[0] : null);
+                      
+                      if (publicKey && typeof publicKey !== 'string') {
+                          publicKey = String(publicKey);
+                      }
+                  } else {
+                      publicKey = addressResponse;
+                  }
+              } else {
+                  throw new Error('Freighter API does not have getAddress or getPublicKey method');
+              }
+              
+              // Ensure publicKey is a string and valid
+              if (!publicKey) {
+                  console.error('❌ No address received. Response:', addressResponse);
+                  throw new Error('No wallet address received from Freighter');
+              }
+              
+              // Convert to string if not already
+              publicKey = String(publicKey).trim();
+              
+              // Validate Stellar address format (should start with G and be 56 chars)
+              if (!publicKey.startsWith('G') || publicKey.length !== 56) {
+                  console.error('⚠️ Invalid Stellar address format:', publicKey);
+                  // Still allow it, but log warning
+              }
+              
+              console.log('✅ Extracted wallet address:', publicKey);
               
               if (publicKey) {
                   userWalletAddress = publicKey;
@@ -475,46 +588,91 @@ const firebaseConfig = {
                   const connectBtn = document.getElementById('connect-wallet-btn');
                   connectBtn.style.display = 'none';
                   
-                  await saveWalletToFirestore(publicKey);
+                  // Get network information
+                  let network = 'unknown';
+                  let networkDetails = null;
+                  try {
+                      if (typeof window.freighterApi.getNetwork === 'function') {
+                          network = await window.freighterApi.getNetwork();
+                      }
+                      if (typeof window.freighterApi.getNetworkDetails === 'function') {
+                          networkDetails = await window.freighterApi.getNetworkDetails();
+                      }
+                  } catch (netError) {
+                      console.warn('Could not get network info:', netError);
+                  }
+                  
+                  // Save to Firestore with complete information
+                  await saveWalletToFirestore(publicKey, network, networkDetails);
                   
                   showToast(`Connected: ${shortAddress}`, 'success');
                   
                   console.log('✅ Wallet connected:', publicKey);
-                  console.log('📊 Network:', await window.freighterApi.getNetwork());
+                  console.log('📊 Network:', network);
+                  if (networkDetails) {
+                      console.log('🌐 Network Details:', networkDetails);
+                  }
               }
               
           } catch (error) {
               console.error('❌ Freighter connection error:', error);
-              if (error.message && error.message.includes('User declined')) {
+              if (error.message && (error.message.includes('User declined') || error.message.includes('denied'))) {
                   showToast('Connection request declined', 'warning');
+              } else if (error.message && error.message.includes('not installed')) {
+                  showFreighterWarning();
               } else {
-                  showToast('Failed to connect wallet', 'error');
+                  showToast(`Failed to connect wallet: ${error.message || 'Unknown error'}`, 'error');
               }
           }
       }
 
-      async function saveWalletToFirestore(publicKey) {
+      async function saveWalletToFirestore(publicKey, network = 'unknown', networkDetails = null) {
           try {
               if (!db) {
-                  console.warn('Firestore not initialized');
+                  console.warn('⚠️ Firestore not initialized');
                   return;
               }
 
               const { doc, setDoc } = window.firebaseModules;
               
-              const userDoc = doc(db, 'users', publicKey);
+              // Save user wallet connection
+              const userDoc = doc(db, 'wallets', publicKey);
               
-              await setDoc(userDoc, {
+              const walletData = {
                   wallet_address: publicKey,
                   connected_at: new Date().toISOString(),
                   last_seen: new Date().toISOString(),
-                  network: await window.freighterApi.getNetwork()
-              }, { merge: true });
+                  network: network,
+                  status: 'connected'
+              };
               
-              console.log('✅ Wallet saved to Firestore');
+              // Add network details if available
+              if (networkDetails) {
+                  walletData.network_details = networkDetails;
+              }
+              
+              await setDoc(userDoc, walletData, { merge: true });
+              
+              console.log('✅ Wallet saved to Firestore:', publicKey);
+              
+              // Also save a connection log entry
+              try {
+                  const { collection, addDoc } = window.firebaseModules;
+                  await addDoc(collection(db, 'connection_logs'), {
+                      wallet_address: publicKey,
+                      connected_at: new Date().toISOString(),
+                      network: network,
+                      action: 'connected'
+                  });
+                  console.log('✅ Connection log saved');
+              } catch (logError) {
+                  console.warn('Could not save connection log:', logError);
+              }
               
           } catch (error) {
               console.error('❌ Error saving to Firestore:', error);
+              console.error('Error details:', error.message, error.code);
+              showToast('Wallet connected but could not save to database', 'warning');
           }
       }
 
@@ -550,16 +708,23 @@ const firebaseConfig = {
           });
       }
 
+      // Check for Freighter wallet after a short delay (wait for library to load)
       setTimeout(async () => {
+          console.log('🔍 Checking for Freighter API...');
+          console.log('📦 window.freighterApi type:', typeof window.freighterApi);
+          console.log('📦 window.freighterApi:', window.freighterApi ? Object.keys(window.freighterApi) : 'undefined');
+          
           const isInstalled = await checkFreighterInstalled();
           if (isInstalled) {
               console.log('✅ Freighter wallet detected and ready');
               showToast('Freighter wallet detected! Click "Connect Wallet" to link your account.', 'success');
           } else {
-              console.log('⚠️ Freighter wallet not detected');
-              console.log('💡 Install Freighter from https://www.freighter.app/');
+              console.log('ℹ️ Freighter extension not detected. Make sure:');
+              console.log('   1. Freighter extension is installed');
+              console.log('   2. Extension is enabled in your browser');
+              console.log('   3. Refresh the page after installing');
           }
-      }, 500);
+      }, 1000);
 
       console.log('🌟 Stellar SDK loaded:', typeof StellarSdk !== 'undefined' ? '✓' : '✗');
   });
