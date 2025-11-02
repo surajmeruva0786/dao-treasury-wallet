@@ -1661,3 +1661,157 @@ body::before {
         grid-template-columns: 1fr;
     }
 }
+
+.role-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.4rem 0.9rem;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    animation: badgePulse 2s ease-in-out infinite;
+}
+
+.admin-badge {
+    background: linear-gradient(135deg, rgba(255, 215, 0, 0.2), rgba(255, 140, 0, 0.2));
+    color: #ffd700;
+    border: 1.5px solid rgba(255, 215, 0, 0.5);
+    box-shadow: 0 0 20px rgba(255, 215, 0, 0.3), inset 0 0 10px rgba(255, 215, 0, 0.1);
+}
+
+.badge-icon {
+    font-size: 1rem;
+    animation: iconSpin 4s linear infinite;
+    filter: drop-shadow(0 0 8px rgba(255, 215, 0, 0.8));
+}
+
+@keyframes badgePulse {
+    0%, 100% {
+        box-shadow: 0 0 20px rgba(255, 215, 0, 0.3), inset 0 0 10px rgba(255, 215, 0, 0.1);
+    }
+    50% {
+        box-shadow: 0 0 30px rgba(255, 215, 0, 0.5), inset 0 0 15px rgba(255, 215, 0, 0.2);
+    }
+}
+
+@keyframes iconSpin {
+    0% {
+        transform: rotate(0deg) scale(1);
+    }
+    50% {
+        transform: rotate(180deg) scale(1.1);
+    }
+    100% {
+        transform: rotate(360deg) scale(1);
+    }
+}
+
+.admin-wallet {
+    background: linear-gradient(135deg, rgba(255, 215, 0, 0.1), rgba(255, 140, 0, 0.05));
+    border: 1.5px solid rgba(255, 215, 0, 0.4);
+    box-shadow: 0 0 25px rgba(255, 215, 0, 0.25);
+    animation: adminGlow 3s ease-in-out infinite;
+}
+
+@keyframes adminGlow {
+    0%, 100% {
+        box-shadow: 0 0 25px rgba(255, 215, 0, 0.25);
+    }
+    50% {
+        box-shadow: 0 0 35px rgba(255, 215, 0, 0.4);
+    }
+}
+
+.admin-wallet:hover {
+    background: linear-gradient(135deg, rgba(255, 215, 0, 0.15), rgba(255, 140, 0, 0.1));
+    box-shadow: 0 0 40px rgba(255, 215, 0, 0.4);
+}
+
+.admin-icon {
+    font-size: 1.4rem;
+    filter: drop-shadow(0 0 10px rgba(255, 215, 0, 0.8));
+    animation: crownFloat 2s ease-in-out infinite;
+}
+
+@keyframes crownFloat {
+    0%, 100% {
+        transform: translateY(0px);
+    }
+    50% {
+        transform: translateY(-3px);
+    }
+}
+
+.user-wallet {
+    background: rgba(99, 102, 241, 0.1);
+    border: 1px solid var(--primary-color);
+}
+
+.user-icon {
+    font-size: 1.2rem;
+}
+
+.execute-payment-btn {
+    margin-top: 1.5rem;
+    width: 100%;
+    background: linear-gradient(135deg, #ffd700, #ff8c00);
+    color: #000;
+    font-weight: 800;
+    letter-spacing: 0.03em;
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 4px 20px rgba(255, 215, 0, 0.4);
+}
+
+.execute-payment-btn::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: linear-gradient(
+        45deg,
+        transparent,
+        rgba(255, 255, 255, 0.3),
+        transparent
+    );
+    transform: rotate(45deg);
+    animation: adminButtonShine 3s linear infinite;
+}
+
+@keyframes adminButtonShine {
+    0% {
+        transform: translateX(-100%) translateY(-100%) rotate(45deg);
+    }
+    100% {
+        transform: translateX(100%) translateY(100%) rotate(45deg);
+    }
+}
+
+.execute-payment-btn:hover {
+    background: linear-gradient(135deg, #ffed4e, #ffa500);
+    box-shadow: 0 6px 30px rgba(255, 215, 0, 0.6);
+    transform: translateY(-2px);
+}
+
+.execute-payment-btn:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 10px rgba(255, 215, 0, 0.4);
+}
+
+.execute-payment-btn:disabled {
+    background: linear-gradient(135deg, #888, #666);
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+.proposal-card .execute-payment-btn .btn-text {
+    position: relative;
+    z-index: 1;
+    font-weight: 900;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}

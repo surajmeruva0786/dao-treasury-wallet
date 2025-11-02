@@ -1,3 +1,5 @@
+const ADMIN_WALLET = 'GAIKYQUWB5BSZNVAZRPXJF7MXZGK7VXGR75NDNCQ6ZXBUWM4FFF7EGK6';
+
 const firebaseConfig = {
     apiKey: "AIzaSyDhzHU80xdBywyK9WtS0mlZhNPYIA3XKkA",
     authDomain: "dao-treasury-wallet-3b7a1.firebaseapp.com",
@@ -10,6 +12,8 @@ const firebaseConfig = {
   
   let firebaseApp;
   let db;
+  let userRole = 'user';
+  let isAdmin = false;
   
   async function initializeFirebase() {
       try {
@@ -138,6 +142,17 @@ const firebaseConfig = {
                   e.preventDefault();
                   const targetId = link.getAttribute('href');
                   const targetSection = document.querySelector(targetId);
+                  
+                  if (targetId !== '#admin') {
+                      const allSections = document.querySelectorAll('section[id]');
+                      allSections.forEach(s => {
+                          if (s.id === 'admin') {
+                              s.style.display = 'none';
+                          } else {
+                              s.style.display = 'block';
+                          }
+                      });
+                  }
                   
                   if (targetSection) {
                       const offsetTop = targetSection.offsetTop - 80;
@@ -608,6 +623,13 @@ const firebaseConfig = {
               if (publicKey) {
                   userWalletAddress = publicKey;
                   
+                  isAdmin = (publicKey === ADMIN_WALLET);
+                  userRole = isAdmin ? 'admin' : 'user';
+                  
+                  if (isAdmin) {
+                      console.log('👑 Admin wallet detected!');
+                  }
+                  
                   const shortAddress = `${publicKey.substring(0, 6)}...${publicKey.substring(publicKey.length - 4)}`;
                   
                   const walletDisplay = document.getElementById('wallet-display');
@@ -615,10 +637,28 @@ const firebaseConfig = {
                   walletText.textContent = shortAddress;
                   walletText.title = publicKey;
                   
+                  const walletIcon = walletDisplay.querySelector('.wallet-icon');
+                  if (isAdmin) {
+                      walletIcon.textContent = '👑';
+                      walletIcon.className = 'wallet-icon admin-icon';
+                      walletDisplay.classList.add('admin-wallet');
+                      
+                      const roleBadge = document.createElement('span');
+                      roleBadge.className = 'role-badge admin-badge';
+                      roleBadge.innerHTML = '<span class="badge-icon">⭐</span>ADMIN';
+                      walletDisplay.appendChild(roleBadge);
+                  } else {
+                      walletIcon.textContent = '🔒';
+                      walletIcon.className = 'wallet-icon user-icon';
+                      walletDisplay.classList.add('user-wallet');
+                  }
+                  
                   walletDisplay.style.display = 'flex';
                   
                   const connectBtn = document.getElementById('connect-wallet-btn');
                   connectBtn.style.display = 'none';
+                  
+                  window.loadProposals();
                   
                   // Get network information
                   let network = 'unknown';
@@ -908,7 +948,7 @@ const firebaseConfig = {
 
           const proposalPassed = votesFor.length > votesAgainst.length;
           const isExecuted = proposal.status === 'executed';
-          const canExecute = proposalPassed && !isExecuted && userWalletAddress;
+          const canExecute = isAdmin && proposalPassed && !isExecuted && userWalletAddress;
 
           const card = document.createElement('div');
           card.className = `proposal-card ${isExecuted ? 'proposal-executed' : ''}`;
@@ -959,7 +999,7 @@ const firebaseConfig = {
               ${canExecute ? `
                   <button class="btn btn-primary execute-payment-btn" 
                           data-proposal-id="${proposalId}">
-                      <span class="btn-text">Execute Payment</span>
+                      <span class="btn-text">👑 Execute Proposal (Admin)</span>
                       <span class="btn-glow"></span>
                   </button>
               ` : ''}
