@@ -24,6 +24,7 @@
                 <li><a href="#home" class="nav-link active">Home</a></li>
                 <li><a href="#proposals" class="nav-link">Proposals</a></li>
                 <li><a href="#treasury" class="nav-link">Treasury</a></li>
+                <li><a href="#admin" class="nav-link admin-link">Admin</a></li>
                 <li id="wallet-display" class="wallet-address" style="display: none;">
                     <span class="wallet-icon">🔒</span>
                     <span class="wallet-text"></span>
@@ -78,31 +79,6 @@
         <section id="treasury" class="section treasury-section">
             <div class="container">
                 <h2 class="section-title">Treasury Dashboard</h2>
-                
-                <div class="treasury-wallet-info">
-                    <div class="wallet-info-card">
-                        <div class="wallet-info-header">
-                            <h3 class="wallet-info-title">Treasury Wallet</h3>
-                        </div>
-                        <div class="wallet-address-display" id="treasury-wallet-address">
-                            <input type="text" id="treasury-wallet-input" class="treasury-wallet-input" 
-                                   placeholder="Enter Treasury Wallet Address (G...)" 
-                                   pattern="G[A-Z0-9]{55}"
-                                   title="Must be a valid Stellar address starting with G">
-                            <button id="set-treasury-wallet-btn" class="btn btn-primary set-wallet-btn">
-                                <span class="btn-text">Set Treasury Wallet</span>
-                                <span class="btn-glow"></span>
-                            </button>
-                            <div class="treasury-wallet-saved" id="treasury-wallet-saved" style="display: none;">
-                                <span class="wallet-saved-icon">✓</span>
-                                <span class="wallet-saved-address"></span>
-                                <button id="change-treasury-wallet-btn" class="btn btn-secondary change-wallet-btn">
-                                    <span class="btn-text">Change</span>
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
 
                 <div class="treasury-grid">
                     <div class="treasury-card">
@@ -139,6 +115,89 @@
                     <div class="transactions-container" id="transactions-container">
                         <div class="loading-state">
                             <span class="loading-spinner">Loading transactions...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="admin" class="section admin-section" style="display: none;">
+            <div class="container">
+                <div id="admin-login-view">
+                    <div class="admin-login-card">
+                        <h2 class="section-title">Admin Login</h2>
+                        <form id="admin-login-form" class="admin-login-form">
+                            <div class="form-group">
+                                <label for="admin-username" class="form-label">Username</label>
+                                <input 
+                                    type="text" 
+                                    id="admin-username" 
+                                    class="form-input" 
+                                    placeholder="Enter username..."
+                                    required
+                                    autocomplete="username"
+                                />
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="admin-password" class="form-label">Password</label>
+                                <input 
+                                    type="password" 
+                                    id="admin-password" 
+                                    class="form-input" 
+                                    placeholder="Enter password..."
+                                    required
+                                    autocomplete="current-password"
+                                />
+                            </div>
+                            
+                            <button type="submit" class="btn btn-primary admin-login-btn">
+                                <span class="btn-text">Login</span>
+                                <span class="btn-glow"></span>
+                            </button>
+                        </form>
+                    </div>
+                </div>
+
+                <div id="admin-dashboard-view" style="display: none;">
+                    <div class="admin-header">
+                        <h2 class="section-title">Admin Dashboard</h2>
+                        <button id="admin-logout-btn" class="btn btn-secondary">
+                            <span class="btn-text">Logout</span>
+                        </button>
+                    </div>
+
+                    <div class="treasury-wallet-info">
+                        <div class="wallet-info-card">
+                            <div class="wallet-info-header">
+                                <h3 class="wallet-info-title">Treasury Wallet Management</h3>
+                            </div>
+                            <div class="wallet-address-display" id="admin-treasury-wallet-address">
+                                <input type="text" id="admin-treasury-wallet-input" class="treasury-wallet-input" 
+                                       placeholder="Enter Treasury Wallet Address (G...)" 
+                                       pattern="G[A-Z0-9]{55}"
+                                       title="Must be a valid Stellar address starting with G">
+                                <button id="admin-set-treasury-wallet-btn" class="btn btn-primary set-wallet-btn">
+                                    <span class="btn-text">Set Treasury Wallet</span>
+                                    <span class="btn-glow"></span>
+                                </button>
+                                <div class="treasury-wallet-saved" id="admin-treasury-wallet-saved" style="display: none;">
+                                    <span class="wallet-saved-icon">✓</span>
+                                    <span class="wallet-saved-address"></span>
+                                    <button id="admin-change-treasury-wallet-btn" class="btn btn-secondary change-wallet-btn">
+                                        <span class="btn-text">Change</span>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="admin-proposals-section">
+                        <h3 class="section-subtitle">Proposals Awaiting Action</h3>
+                        <div class="admin-proposals-grid" id="admin-proposals-grid">
+                            <div class="loading-state">
+                                <span class="loading-spinner">Loading proposals...</span>
+                            </div>
                         </div>
                     </div>
                 </div>

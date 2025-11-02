@@ -96,26 +96,27 @@ const firebaseConfig = {
       const toast = document.createElement('div');
       toast.className = `toast toast-${type}`;
       
-      const icon = type === 'success' ? '✨' : '⚠️';
+      let icon = '✓';
+      if (type === 'error') icon = '✗';
+      if (type === 'warning') icon = '!';
       
       toast.innerHTML = `
           <div class="toast-icon">${icon}</div>
           <div class="toast-message">${message}</div>
-          <div class="toast-glow"></div>
       `;
       
       toastContainer.appendChild(toast);
       
       setTimeout(() => {
           toast.classList.add('toast-show');
-      }, 100);
+      }, 10);
       
       setTimeout(() => {
           toast.classList.remove('toast-show');
           setTimeout(() => {
               toast.remove();
-          }, 400);
-      }, 4000);
+          }, 300);
+      }, 3000);
   }
   
   document.addEventListener('DOMContentLoaded', () => {
@@ -152,6 +153,14 @@ const firebaseConfig = {
                   if (window.innerWidth <= 768) {
                       navLinksContainer.classList.remove('active');
                       mobileMenuToggle.classList.remove('active');
+                  }
+                  
+                  if (targetId === '#treasury') {
+                      setTimeout(() => {
+                          if (window.refreshTreasuryData && typeof window.refreshTreasuryData === 'function') {
+                              window.refreshTreasuryData();
+                          }
+                      }, 300);
                   }
               }
           });
@@ -929,7 +938,7 @@ const firebaseConfig = {
               </div>
               <div class="proposal-meta">
                   <div>
-                      <div class="proposal-amount">💰 ${proposal.amount.toLocaleString()} XLM</div>
+                      <div class="proposal-amount">${proposal.amount.toLocaleString()} XLM</div>
                       <div class="proposal-recipient" title="${proposal.recipient}">→ ${shortRecipient}</div>
                   </div>
               </div>
@@ -938,19 +947,19 @@ const firebaseConfig = {
                           data-proposal-id="${proposalId}" 
                           data-vote-type="for"
                           ${!userWalletAddress ? 'disabled' : ''}>
-                      👍 Vote For
+                      Vote For
                   </button>
                   <button class="vote-btn vote-btn-against ${hasVotedAgainst ? 'voted' : ''}" 
                           data-proposal-id="${proposalId}" 
                           data-vote-type="against"
                           ${!userWalletAddress ? 'disabled' : ''}>
-                      👎 Vote Against
+                      Vote Against
                   </button>
               </div>
               ${canExecute ? `
                   <button class="btn btn-primary execute-payment-btn" 
                           data-proposal-id="${proposalId}">
-                      <span class="btn-text">💸 Execute Payment</span>
+                      <span class="btn-text">Execute Payment</span>
                       <span class="btn-glow"></span>
                   </button>
               ` : ''}
@@ -1374,10 +1383,31 @@ const firebaseConfig = {
                   }
 
                   // Only fetch transactions if account exists
+                  let transactionCount = 0;
                   if (!result.accountNotFound) {
                       try {
                           const transactions = await fetchRecentTransactions(treasuryWalletAddress);
                           displayTransactions(transactions);
+                          transactionCount = transactions.length;
+                          
+                          // Save balance data to Firestore
+                          if (db) {
+                              try {
+                                  const { doc, setDoc, serverTimestamp } = window.firebaseModules;
+                                  const treasuryDataRef = doc(db, 'treasury_data', 'balance_info');
+                                  await setDoc(treasuryDataRef, {
+                                      walletAddress: treasuryWalletAddress,
+                                      balance: result.balance,
+                                      transactionCount: transactionCount,
+                                      lastUpdated: serverTimestamp(),
+                                      network: USE_TESTNET ? 'TESTNET' : 'MAINNET',
+                                      accountExists: true
+                                  });
+                                  console.log('✅ Treasury balance saved to Firestore');
+                              } catch (firestoreError) {
+                                  console.warn('⚠️ Could not save to Firestore:', firestoreError);
+                              }
+                          }
                       } catch (txError) {
                           console.warn('Could not fetch transactions:', txError);
                           // Don't show error, just log it
@@ -1410,7 +1440,7 @@ const firebaseConfig = {
                       networkElement.textContent = USE_TESTNET ? 'Testnet' : 'Mainnet';
                   }
 
-                  showToast('Treasury data refreshed ✨', 'success');
+                  showToast('Treasury data refreshed', 'success');
               } catch (error) {
                   console.error('Error refreshing treasury data:', error);
                   
@@ -1461,7 +1491,7 @@ const firebaseConfig = {
               setWalletBtn.style.display = 'none';
               savedContainer.style.display = 'flex';
               
-              showToast('Treasury wallet set successfully! ✨', 'success');
+              showToast('Treasury wallet set successfully', 'success');
               
               await refreshTreasuryData();
           });
@@ -1487,6 +1517,8 @@ const firebaseConfig = {
       if (refreshBalanceBtn) {
           refreshBalanceBtn.addEventListener('click', refreshTreasuryData);
       }
+      
+      window.refreshTreasuryData = refreshTreasuryData;
 
       const savedWallet = loadTreasuryWallet();
       if (savedWallet) {
@@ -1654,6 +1686,337 @@ const firebaseConfig = {
       }
 
       window.executePayment = executePayment;
+
+      let isAdminLoggedIn = false;
+
+      function checkAdminLogin() {
+          const adminLoggedIn = sessionStorage.getItem('adminLoggedIn');
+          if (adminLoggedIn === 'true') {
+              isAdminLoggedIn = true;
+              showAdminDashboard();
+          }
+      }
+
+      function showAdminDashboard() {
+          const loginView = document.getElementById('admin-login-view');
+          const dashboardView = document.getElementById('admin-dashboard-view');
+          
+          if (loginView && dashboardView) {
+              loginView.style.display = 'none';
+              dashboardView.style.display = 'block';
+          }
+          
+          const savedWallet = loadTreasuryWallet();
+          if (savedWallet) {
+              const input = document.getElementById('admin-treasury-wallet-input');
+              const setBtn = document.getElementById('admin-set-treasury-wallet-btn');
+              const savedContainer = document.getElementById('admin-treasury-wallet-saved');
+              const savedAddress = savedContainer.querySelector('.wallet-saved-address');
+              
+              const shortAddr = `${savedWallet.substring(0, 8)}...${savedWallet.substring(savedWallet.length - 6)}`;
+              savedAddress.textContent = shortAddr;
+              savedAddress.title = savedWallet;
+              
+              if (input && setBtn && savedContainer) {
+                  input.parentElement.style.display = 'none';
+                  setBtn.style.display = 'none';
+                  savedContainer.style.display = 'flex';
+              }
+          }
+          
+          loadAdminProposals();
+      }
+
+      function showAdminLogin() {
+          const loginView = document.getElementById('admin-login-view');
+          const dashboardView = document.getElementById('admin-dashboard-view');
+          
+          if (loginView && dashboardView) {
+              loginView.style.display = 'block';
+              dashboardView.style.display = 'none';
+          }
+      }
+
+      const adminLoginForm = document.getElementById('admin-login-form');
+      if (adminLoginForm) {
+          adminLoginForm.addEventListener('submit', (e) => {
+              e.preventDefault();
+              
+              const username = document.getElementById('admin-username').value.trim();
+              const password = document.getElementById('admin-password').value;
+              
+              if (username === 'treasury_admin' && password === 'treasury_pass') {
+                  isAdminLoggedIn = true;
+                  sessionStorage.setItem('adminLoggedIn', 'true');
+                  showToast('Admin login successful! ✨', 'success');
+                  showAdminDashboard();
+                  
+                  document.getElementById('admin-username').value = '';
+                  document.getElementById('admin-password').value = '';
+              } else {
+                  showToast('Invalid credentials', 'error');
+              }
+          });
+      }
+
+      const adminLogoutBtn = document.getElementById('admin-logout-btn');
+      if (adminLogoutBtn) {
+          adminLogoutBtn.addEventListener('click', () => {
+              isAdminLoggedIn = false;
+              sessionStorage.removeItem('adminLoggedIn');
+              showToast('Logged out successfully', 'success');
+              showAdminLogin();
+              
+              const sections = document.querySelectorAll('section[id]');
+              sections.forEach(s => s.style.display = 'none');
+              document.getElementById('home').style.display = 'block';
+              
+              const navLinks = document.querySelectorAll('.nav-link');
+              navLinks.forEach(l => l.classList.remove('active'));
+              document.querySelector('.nav-link[href="#home"]').classList.add('active');
+          });
+      }
+
+      const adminSection = document.getElementById('admin');
+      const adminLink = document.querySelector('.nav-link[href="#admin"]');
+      
+      if (adminLink) {
+          const originalNavClickHandler = adminLink.onclick;
+          adminLink.addEventListener('click', (e) => {
+              e.preventDefault();
+              
+              const sections = document.querySelectorAll('section[id]');
+              sections.forEach(s => s.style.display = 'none');
+              
+              if (adminSection) {
+                  adminSection.style.display = 'block';
+              }
+              
+              const navLinks = document.querySelectorAll('.nav-link');
+              navLinks.forEach(l => l.classList.remove('active'));
+              adminLink.classList.add('active');
+              
+              window.scrollTo({
+                  top: 0,
+                  behavior: 'smooth'
+              });
+              
+              checkAdminLogin();
+          });
+      }
+
+      const adminSetWalletBtn = document.getElementById('admin-set-treasury-wallet-btn');
+      if (adminSetWalletBtn) {
+          adminSetWalletBtn.addEventListener('click', async () => {
+              const input = document.getElementById('admin-treasury-wallet-input');
+              const address = input.value.trim();
+              
+              if (!address) {
+                  showToast('Please enter a wallet address', 'warning');
+                  return;
+              }
+
+              if (!address.startsWith('G') || address.length !== 56) {
+                  showToast('Invalid Stellar address format', 'error');
+                  return;
+              }
+
+              saveTreasuryWallet(address);
+              
+              const inputContainer = input.parentElement;
+              const savedContainer = document.getElementById('admin-treasury-wallet-saved');
+              const savedAddress = savedContainer.querySelector('.wallet-saved-address');
+              
+              const shortAddr = `${address.substring(0, 8)}...${address.substring(address.length - 6)}`;
+              savedAddress.textContent = shortAddr;
+              savedAddress.title = address;
+              
+              inputContainer.style.display = 'none';
+              adminSetWalletBtn.style.display = 'none';
+              savedContainer.style.display = 'flex';
+              
+              showToast('Treasury wallet set successfully', 'success');
+              
+              await refreshTreasuryData();
+          });
+      }
+
+      const adminChangeWalletBtn = document.getElementById('admin-change-treasury-wallet-btn');
+      if (adminChangeWalletBtn) {
+          adminChangeWalletBtn.addEventListener('click', () => {
+              const input = document.getElementById('admin-treasury-wallet-input');
+              const setBtn = document.getElementById('admin-set-treasury-wallet-btn');
+              const savedContainer = document.getElementById('admin-treasury-wallet-saved');
+              
+              input.parentElement.style.display = 'flex';
+              setBtn.style.display = 'inline-block';
+              savedContainer.style.display = 'none';
+              
+              input.value = treasuryWalletAddress || '';
+              input.focus();
+          });
+      }
+
+      function renderAdminProposal(proposal, proposalId) {
+          const votesFor = proposal.votesFor ? proposal.votesFor.length : 0;
+          const votesAgainst = proposal.votesAgainst ? proposal.votesAgainst.length : 0;
+          const totalVotes = votesFor + votesAgainst;
+          const votesForPercent = totalVotes > 0 ? (votesFor / totalVotes) * 100 : 0;
+          
+          const isApproved = votesFor > votesAgainst;
+          const isExecuted = proposal.status === 'executed';
+          
+          const card = document.createElement('div');
+          card.className = `proposal-card ${isExecuted ? 'proposal-executed' : ''}`;
+          
+          let actionButton = '';
+          if (isExecuted) {
+              actionButton = `
+                  <div class="proposal-approved-badge">
+                      ✓ Payment Executed
+                  </div>
+                  ${proposal.transactionHash ? `
+                      <a href="${USE_TESTNET ? 'https://testnet.stellarchain.io' : 'https://stellarchain.io'}/transactions/${proposal.transactionHash}" 
+                         target="_blank" 
+                         class="btn btn-secondary" 
+                         style="margin-top: 1rem; width: 100%; text-decoration: none;">
+                          <span class="btn-text">View Transaction</span>
+                      </a>
+                  ` : ''}
+              `;
+          } else if (isApproved) {
+              actionButton = `
+                  <div class="proposal-approved-badge">
+                      ✓ Approved (${votesFor} for, ${votesAgainst} against)
+                  </div>
+                  <button class="btn btn-primary admin-action-btn" data-proposal-id="${proposalId}">
+                      <span class="btn-text">💸 Process Payment</span>
+                      <span class="btn-glow"></span>
+                  </button>
+              `;
+          } else {
+              actionButton = `
+                  <div class="proposal-rejected-badge">
+                      ✗ Not Approved (${votesFor} for, ${votesAgainst} against)
+                  </div>
+              `;
+          }
+          
+          card.innerHTML = `
+              <div class="proposal-header">
+                  <span class="proposal-status ${isExecuted ? 'status-executed' : 'status-active'}">${isExecuted ? 'Executed' : 'Active'}</span>
+                  <span class="proposal-id">#${proposalId.substring(0, 8)}</span>
+              </div>
+              <h3 class="proposal-title">${proposal.title || 'Untitled Proposal'}</h3>
+              <p class="proposal-description">${proposal.description || 'No description provided'}</p>
+              <div class="proposal-stats">
+                  <div class="proposal-stat">
+                      <span class="stat-label">For</span>
+                      <span class="stat-value">${votesFor}</span>
+                  </div>
+                  <div class="proposal-stat">
+                      <span class="stat-label">Against</span>
+                      <span class="stat-value">${votesAgainst}</span>
+                  </div>
+              </div>
+              <div class="proposal-progress">
+                  <div class="progress-bar" style="width: ${votesForPercent}%"></div>
+              </div>
+              <div class="proposal-meta">
+                  <span class="proposal-amount">${proposal.amount || 0} XLM</span>
+                  <span class="proposal-recipient" title="${proposal.recipient || ''}">${proposal.recipient ? proposal.recipient.substring(0, 8) + '...' + proposal.recipient.substring(proposal.recipient.length - 6) : 'N/A'}</span>
+              </div>
+              ${actionButton}
+          `;
+          
+          const actionBtn = card.querySelector('.admin-action-btn');
+          if (actionBtn) {
+              actionBtn.addEventListener('click', async () => {
+                  if (!userWalletAddress) {
+                      showToast('Please connect your Freighter wallet first', 'warning');
+                      return;
+                  }
+                  
+                  try {
+                      actionBtn.disabled = true;
+                      actionBtn.querySelector('.btn-text').textContent = 'Processing...';
+                      await window.executePayment(proposalId, proposal);
+                      loadAdminProposals();
+                  } catch (error) {
+                      console.error('Payment execution failed:', error);
+                      actionBtn.disabled = false;
+                      actionBtn.querySelector('.btn-text').textContent = '💸 Process Payment';
+                  }
+              });
+          }
+          
+          return card;
+      }
+
+      async function loadAdminProposals() {
+          const adminProposalsGrid = document.getElementById('admin-proposals-grid');
+          
+          if (!adminProposalsGrid) {
+              return;
+          }
+          
+          if (!db) {
+              adminProposalsGrid.innerHTML = `
+                  <div class="empty-proposals">
+                      <div class="empty-proposals-icon">⚠️</div>
+                      <div class="empty-proposals-text">Database not initialized</div>
+                  </div>
+              `;
+              return;
+          }
+          
+          try {
+              const { collection, onSnapshot } = window.firebaseModules;
+              const proposalsCollection = collection(db, 'proposals');
+              
+              onSnapshot(proposalsCollection, (snapshot) => {
+                  adminProposalsGrid.innerHTML = '';
+                  
+                  if (snapshot.empty) {
+                      adminProposalsGrid.innerHTML = `
+                          <div class="empty-proposals">
+                              <div class="empty-proposals-icon">📋</div>
+                              <div class="empty-proposals-text">No proposals to display</div>
+                          </div>
+                      `;
+                      return;
+                  }
+                  
+                  const proposalsArray = [];
+                  snapshot.forEach((doc) => {
+                      const proposal = doc.data();
+                      proposalsArray.push({ id: doc.id, data: proposal, timestamp: proposal.createdAt });
+                  });
+                  
+                  proposalsArray.sort((a, b) => {
+                      if (!a.timestamp || !b.timestamp) return 0;
+                      const aTime = a.timestamp.seconds || 0;
+                      const bTime = b.timestamp.seconds || 0;
+                      return bTime - aTime;
+                  });
+                  
+                  proposalsArray.forEach((item) => {
+                      const proposalCard = renderAdminProposal(item.data, item.id);
+                      adminProposalsGrid.appendChild(proposalCard);
+                  });
+              });
+          } catch (error) {
+              console.error('Error loading admin proposals:', error);
+              adminProposalsGrid.innerHTML = `
+                  <div class="empty-proposals">
+                      <div class="empty-proposals-icon">⚠️</div>
+                      <div class="empty-proposals-text">Error loading proposals</div>
+                  </div>
+              `;
+          }
+      }
+
+      checkAdminLogin();
 
   });
   
