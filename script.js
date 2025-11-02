@@ -139,20 +139,25 @@ const firebaseConfig = {
       navLinks.forEach(link => {
           link.addEventListener('click', (e) => {
               if (link.getAttribute('href').startsWith('#')) {
-                  e.preventDefault();
                   const targetId = link.getAttribute('href');
+                  
+                  // Skip general handler for admin link - it has its own handler
+                  if (targetId === '#admin') {
+                      e.preventDefault();
+                      return;
+                  }
+                  
+                  e.preventDefault();
                   const targetSection = document.querySelector(targetId);
                   
-                  if (targetId !== '#admin') {
-                      const allSections = document.querySelectorAll('section[id]');
-                      allSections.forEach(s => {
-                          if (s.id === 'admin') {
-                              s.style.display = 'none';
-                          } else {
-                              s.style.display = 'block';
-                          }
-                      });
-                  }
+                  const allSections = document.querySelectorAll('section[id]');
+                  allSections.forEach(s => {
+                      if (s.id === 'admin') {
+                          s.style.display = 'none';
+                      } else {
+                          s.style.display = 'block';
+                      }
+                  });
                   
                   if (targetSection) {
                       const offsetTop = targetSection.offsetTop - 80;
@@ -161,10 +166,10 @@ const firebaseConfig = {
                           behavior: 'smooth'
                       });
                   }
-  
+
                   navLinks.forEach(l => l.classList.remove('active'));
                   link.classList.add('active');
-  
+
                   if (window.innerWidth <= 768) {
                       navLinksContainer.classList.remove('active');
                       mobileMenuToggle.classList.remove('active');
@@ -456,6 +461,11 @@ const firebaseConfig = {
           anchor.addEventListener('click', function (e) {
               const href = this.getAttribute('href');
               if (href !== '#') {
+                  // Skip admin link - it has its own handler
+                  if (href === '#admin') {
+                      e.preventDefault();
+                      return;
+                  }
                   e.preventDefault();
                   const target = document.querySelector(href);
                   if (target) {
@@ -1820,17 +1830,16 @@ const firebaseConfig = {
       const adminSection = document.getElementById('admin');
       const adminLink = document.querySelector('.nav-link[href="#admin"]');
       
-      if (adminLink) {
-          const originalNavClickHandler = adminLink.onclick;
+      if (adminLink && adminSection) {
           adminLink.addEventListener('click', (e) => {
+              console.log('🔐 Admin link clicked');
               e.preventDefault();
               
               const sections = document.querySelectorAll('section[id]');
               sections.forEach(s => s.style.display = 'none');
               
-              if (adminSection) {
-                  adminSection.style.display = 'block';
-              }
+              adminSection.style.display = 'block';
+              console.log('✅ Admin section displayed');
               
               const navLinks = document.querySelectorAll('.nav-link');
               navLinks.forEach(l => l.classList.remove('active'));
@@ -1843,6 +1852,8 @@ const firebaseConfig = {
               
               checkAdminLogin();
           });
+      } else {
+          console.error('❌ Admin link or section not found:', { adminLink, adminSection });
       }
 
       const adminSetWalletBtn = document.getElementById('admin-set-treasury-wallet-btn');
