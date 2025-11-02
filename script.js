@@ -1,3 +1,18 @@
+if (!Element.prototype.matches) {
+    Element.prototype.matches = Element.prototype.msMatchesSelector || Element.prototype.webkitMatchesSelector;
+}
+
+if (!Element.prototype.closest) {
+    Element.prototype.closest = function(s) {
+        var el = this;
+        do {
+            if (el.matches(s)) return el;
+            el = el.parentElement || el.parentNode;
+        } while (el !== null && el.nodeType === 1);
+        return null;
+    };
+}
+
 const ADMIN_WALLET = 'GAIKYQUWB5BSZNVAZRPXJF7MXZGK7VXGR75NDNCQ6ZXBUWM4FFF7EGK6';
 
 const firebaseConfig = {
@@ -143,7 +158,6 @@ const firebaseConfig = {
                   
                   // Skip general handler for admin link - it has its own handler
                   if (targetId === '#admin') {
-                      e.preventDefault();
                       return;
                   }
                   
@@ -463,7 +477,6 @@ const firebaseConfig = {
               if (href !== '#') {
                   // Skip admin link - it has its own handler
                   if (href === '#admin') {
-                      e.preventDefault();
                       return;
                   }
                   e.preventDefault();
@@ -1153,8 +1166,8 @@ const firebaseConfig = {
 
       window.loadProposals = loadProposals;
 
-      const USE_TESTNET = false;
-      const USE_FUTURENET = true;
+      const USE_TESTNET = true;
+      const USE_FUTURENET = false;
       const HORIZON_URL = USE_FUTURENET
           ? 'https://horizon-futurenet.stellar.org'
           : USE_TESTNET 
@@ -1659,7 +1672,7 @@ const firebaseConfig = {
               const sourceAccount = await server.loadAccount(userWalletAddress);
 
               const networkPassphrase = USE_FUTURENET
-                  ? 'Test SDF Future Network ; October 2015'
+                  ? 'Test SDF Future Network ; October 2022'
                   : USE_TESTNET 
                       ? StellarSdk.Networks.TESTNET 
                       : StellarSdk.Networks.PUBLIC;
@@ -1870,34 +1883,37 @@ const firebaseConfig = {
           });
       }
 
-      const adminSection = document.getElementById('admin');
-      const adminLink = document.querySelector('.nav-link[href="#admin"]');
-      
-      if (adminLink && adminSection) {
-          adminLink.addEventListener('click', (e) => {
-              console.log('🔐 Admin link clicked');
-              e.preventDefault();
-              
-              const sections = document.querySelectorAll('section[id]');
-              sections.forEach(s => s.style.display = 'none');
-              
-              adminSection.style.display = 'block';
-              console.log('✅ Admin section displayed');
-              
-              const navLinks = document.querySelectorAll('.nav-link');
-              navLinks.forEach(l => l.classList.remove('active'));
-              adminLink.classList.add('active');
-              
-              window.scrollTo({
-                  top: 0,
-                  behavior: 'smooth'
-              });
-              
-              checkAdminLogin();
+      document.body.addEventListener('click', (e) => {
+          const target = e.target.closest('a[href="#admin"]');
+          if (!target) return;
+          
+          console.log('🔐 Admin link clicked');
+          e.preventDefault();
+          e.stopPropagation();
+          
+          const adminSection = document.getElementById('admin');
+          if (!adminSection) {
+              console.error('❌ Admin section not found');
+              return;
+          }
+          
+          const sections = document.querySelectorAll('section[id]');
+          sections.forEach(s => s.style.display = 'none');
+          
+          adminSection.style.display = 'block';
+          console.log('✅ Admin section displayed');
+          
+          const navLinks = document.querySelectorAll('.nav-link');
+          navLinks.forEach(l => l.classList.remove('active'));
+          target.classList.add('active');
+          
+          window.scrollTo({
+              top: 0,
+              behavior: 'smooth'
           });
-      } else {
-          console.error('❌ Admin link or section not found:', { adminLink, adminSection });
-      }
+          
+          checkAdminLogin();
+      });
 
       const adminSetWalletBtn = document.getElementById('admin-set-treasury-wallet-btn');
       if (adminSetWalletBtn) {
