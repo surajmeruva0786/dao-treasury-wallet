@@ -1153,10 +1153,13 @@ const firebaseConfig = {
 
       window.loadProposals = loadProposals;
 
-      const USE_TESTNET = true;
-      const HORIZON_URL = USE_TESTNET 
-          ? 'https://horizon-testnet.stellar.org'
-          : 'https://horizon.stellar.org';
+      const USE_TESTNET = false;
+      const USE_FUTURENET = true;
+      const HORIZON_URL = USE_FUTURENET
+          ? 'https://horizon-futurenet.stellar.org'
+          : USE_TESTNET 
+              ? 'https://horizon-testnet.stellar.org'
+              : 'https://horizon.stellar.org';
       
       let treasuryWalletAddress = null;
 
@@ -1181,7 +1184,7 @@ const firebaseConfig = {
 
           console.log(`🔍 Fetching balance for address: ${walletAddress}`);
           console.log(`🌐 Using Horizon URL: ${HORIZON_URL}`);
-          console.log(`📡 Network: ${USE_TESTNET ? 'TESTNET' : 'MAINNET'}`);
+          console.log(`📡 Network: ${USE_FUTURENET ? 'FUTURENET' : USE_TESTNET ? 'TESTNET' : 'MAINNET'}`);
 
           let retries = 3;
           while (retries > 0) {
@@ -1203,9 +1206,10 @@ const firebaseConfig = {
                   if (!response.ok) {
                       if (response.status === 404) {
                           // Account not found - check if it might be on the wrong network
+                          const networkName = USE_FUTURENET ? 'FUTURENET' : USE_TESTNET ? 'TESTNET' : 'MAINNET';
                           console.log('ℹ️ Account not found on current network');
                           console.log(`   Address: ${walletAddress}`);
-                          console.log(`   Network: ${USE_TESTNET ? 'TESTNET' : 'MAINNET'}`);
+                          console.log(`   Network: ${networkName}`);
                           console.log(`   ⚠️  If you have funds, make sure you're on the correct network!`);
                           
                           // Try to provide helpful error message
@@ -1216,7 +1220,7 @@ const firebaseConfig = {
                               balance: 0,
                               accountData: null,
                               accountNotFound: true,
-                              errorMessage: `Account not found on ${USE_TESTNET ? 'TESTNET' : 'MAINNET'}. Make sure you're checking the correct network.`
+                              errorMessage: `Account not found on ${networkName}. Make sure you're checking the correct network.`
                           };
                       }
                       // For other errors, retry
@@ -1365,9 +1369,11 @@ const firebaseConfig = {
           container.innerHTML = transactions.map(tx => {
               const txDate = new Date(tx.created_at);
               const txType = tx.type || 'payment';
-              const explorerUrl = USE_TESTNET
-                  ? `https://testnet.stellarchain.io/transactions/${tx.hash}`
-                  : `https://stellarchain.io/transactions/${tx.hash}`;
+              const explorerUrl = USE_FUTURENET
+                  ? `https://futurenet.stellarchain.io/transactions/${tx.hash}`
+                  : USE_TESTNET
+                      ? `https://testnet.stellarchain.io/transactions/${tx.hash}`
+                      : `https://stellarchain.io/transactions/${tx.hash}`;
               
               return `
                   <div class="transaction-row">
@@ -1450,7 +1456,7 @@ const firebaseConfig = {
                                       balance: result.balance,
                                       transactionCount: transactionCount,
                                       lastUpdated: serverTimestamp(),
-                                      network: USE_TESTNET ? 'TESTNET' : 'MAINNET',
+                                      network: USE_FUTURENET ? 'FUTURENET' : USE_TESTNET ? 'TESTNET' : 'MAINNET',
                                       accountExists: true
                                   });
                                   console.log('✅ Treasury balance saved to Firestore');
@@ -1475,7 +1481,8 @@ const firebaseConfig = {
                           `;
                       }
                       
-                      let toastMessage = 'Account not found on ' + (USE_TESTNET ? 'TESTNET' : 'MAINNET');
+                      const networkName = USE_FUTURENET ? 'FUTURENET' : USE_TESTNET ? 'TESTNET' : 'MAINNET';
+                      let toastMessage = 'Account not found on ' + networkName;
                       if (result.errorMessage) {
                           toastMessage += '. Make sure you\'re checking the correct network.';
                       } else {
@@ -1487,7 +1494,7 @@ const firebaseConfig = {
 
                   const networkElement = document.getElementById('stellar-network');
                   if (networkElement) {
-                      networkElement.textContent = USE_TESTNET ? 'Testnet' : 'Mainnet';
+                      networkElement.textContent = USE_FUTURENET ? 'Futurenet' : USE_TESTNET ? 'Testnet' : 'Mainnet';
                   }
 
                   showToast('Treasury data refreshed', 'success');
@@ -1651,11 +1658,15 @@ const firebaseConfig = {
               const server = new StellarSdk.Horizon.Server(HORIZON_URL);
               const sourceAccount = await server.loadAccount(userWalletAddress);
 
+              const networkPassphrase = USE_FUTURENET
+                  ? 'Test SDF Future Network ; October 2015'
+                  : USE_TESTNET 
+                      ? StellarSdk.Networks.TESTNET 
+                      : StellarSdk.Networks.PUBLIC;
+
               const transaction = new StellarSdk.TransactionBuilder(sourceAccount, {
                   fee: StellarSdk.BASE_FEE,
-                  networkPassphrase: USE_TESTNET 
-                      ? StellarSdk.Networks.TESTNET 
-                      : StellarSdk.Networks.PUBLIC
+                  networkPassphrase: networkPassphrase
               })
               .addOperation(StellarSdk.Operation.payment({
                   destination: currentProposal.recipient,
@@ -1671,14 +1682,12 @@ const firebaseConfig = {
               showToast('Please sign the transaction in Freighter...', 'success');
 
               const signedXdr = await window.freighterApi.signTransaction(xdr, {
-                  networkPassphrase: USE_TESTNET 
-                      ? StellarSdk.Networks.TESTNET 
-                      : StellarSdk.Networks.PUBLIC
+                  networkPassphrase: networkPassphrase
               });
 
-              const signedTransaction = StellarSdk.TransactionBuilder.fromXDR(
+              const signedTransaction = new StellarSdk.Transaction(
                   signedXdr,
-                  HORIZON_URL
+                  networkPassphrase
               );
 
               showToast('Submitting transaction to Stellar network...', 'success');
@@ -1740,10 +1749,25 @@ const firebaseConfig = {
       let isAdminLoggedIn = false;
 
       function checkAdminLogin() {
-          const adminLoggedIn = sessionStorage.getItem('adminLoggedIn');
-          if (adminLoggedIn === 'true') {
-              isAdminLoggedIn = true;
-              showAdminDashboard();
+          try {
+              // Check if sessionStorage is available (Edge browser compatibility)
+              if (typeof sessionStorage === 'undefined') {
+                  console.warn('⚠️ SessionStorage not available');
+                  return;
+              }
+              
+              const adminLoggedIn = sessionStorage.getItem('adminLoggedIn');
+              if (adminLoggedIn === 'true') {
+                  isAdminLoggedIn = true;
+                  showAdminDashboard();
+              }
+          } catch (error) {
+              // Handle Edge browser security/privacy errors
+              console.warn('⚠️ SessionStorage access error (Edge compatibility):', error.message);
+              // Fallback: check isAdminLoggedIn variable
+              if (isAdminLoggedIn) {
+                  showAdminDashboard();
+              }
           }
       }
 
@@ -1797,7 +1821,17 @@ const firebaseConfig = {
               
               if (username === 'treasury_admin' && password === 'treasury_pass') {
                   isAdminLoggedIn = true;
-                  sessionStorage.setItem('adminLoggedIn', 'true');
+                  
+                  // Try to save to sessionStorage, but handle Edge browser issues
+                  try {
+                      if (typeof sessionStorage !== 'undefined') {
+                          sessionStorage.setItem('adminLoggedIn', 'true');
+                      }
+                  } catch (error) {
+                      console.warn('⚠️ SessionStorage save error (Edge compatibility):', error.message);
+                      // Fallback: isAdminLoggedIn variable is already set above
+                  }
+                  
                   showToast('Admin login successful! ✨', 'success');
                   showAdminDashboard();
                   
@@ -1813,7 +1847,16 @@ const firebaseConfig = {
       if (adminLogoutBtn) {
           adminLogoutBtn.addEventListener('click', () => {
               isAdminLoggedIn = false;
-              sessionStorage.removeItem('adminLoggedIn');
+              
+              // Try to clear sessionStorage, but handle Edge browser issues
+              try {
+                  if (typeof sessionStorage !== 'undefined') {
+                      sessionStorage.removeItem('adminLoggedIn');
+                  }
+              } catch (error) {
+                  console.warn('⚠️ SessionStorage clear error (Edge compatibility):', error.message);
+              }
+              
               showToast('Logged out successfully', 'success');
               showAdminLogin();
               
@@ -1927,7 +1970,7 @@ const firebaseConfig = {
                       ✓ Payment Executed
                   </div>
                   ${proposal.transactionHash ? `
-                      <a href="${USE_TESTNET ? 'https://testnet.stellarchain.io' : 'https://stellarchain.io'}/transactions/${proposal.transactionHash}" 
+                      <a href="${USE_FUTURENET ? 'https://futurenet.stellarchain.io' : USE_TESTNET ? 'https://testnet.stellarchain.io' : 'https://stellarchain.io'}/transactions/${proposal.transactionHash}" 
                          target="_blank" 
                          class="btn btn-secondary" 
                          style="margin-top: 1rem; width: 100%; text-decoration: none;">

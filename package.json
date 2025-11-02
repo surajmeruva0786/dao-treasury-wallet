@@ -1,0 +1,24 @@
+{
+  "name": "dao-treasury-wallet",
+  "version": "1.0.0",
+  "description": "DAO Treasury Wallet - A decentralized platform for managing organizational funds through on-chain governance",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "keywords": [
+    "dao",
+    "treasury",
+    "wallet",
+    "stellar",
+    "blockchain",
+    "governance"
+  ],
+  "author": "",
+  "license": "MIT",
+  "engines": {
+    "node": ">=14.0.0"
+  }
+}
+
